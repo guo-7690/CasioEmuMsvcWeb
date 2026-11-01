@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>CasioEmu Web · 卡西欧计算器模拟器</title>
+<style>
+:root{
+  --bg:#101318; --panel:#171b22; --panel2:#1e242e; --line:#2a3140; --text:#d7dce4; --dim:#8a93a5;
+  --acc:#4da3ff; --ok:#3ecf8e; --warn:#f5b84b; --err:#ff6b6b;
+}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font:13px/1.45 "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;}
+*{box-sizing:border-box}
+button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);
+  border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--acc);color:#fff}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:#2b6cb0;border-color:#3a7fc7}
+select,input[type=number]{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+#topbar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);
+  background:var(--panel);flex-wrap:wrap;position:relative;z-index:5}
+.brand{font-weight:700;font-size:15px;letter-spacing:.3px}
+.brand b{color:var(--acc)}
+.sep{width:1px;height:22px;background:var(--line)}
+#modelSelect{min-width:150px;max-width:240px}
+.transport{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#main{display:flex;height:calc(100% - 84px)}
+#leftPanel{width:440px;min-width:300px;display:flex;flex-direction:column;gap:10px;padding:12px;
+  border-right:1px solid var(--line);overflow:auto;background:var(--panel)}
+#lcdWrap{display:none}
+#kbdWrap{background:none;border:none;padding:0;
+  display:flex;justify-content:center;align-items:center;position:relative;min-height:120px;overflow:visible}
+#kbdStage{position:relative;display:block;width:fit-content;max-width:100%;line-height:0;margin:0 auto}
+#kbdCanvas{display:block;max-width:100%;height:auto;touch-action:none;user-select:none;-webkit-user-select:none}
+/* LCD 叠加在计算器图的屏幕区域上 */
+#lcdCanvas{position:absolute;left:0;top:0;display:none;
+  image-rendering:pixelated;pointer-events:none;border-radius:1px}
+#lcdCanvas.active{display:block}
+#kbdHint{color:var(--dim);font-size:12px}
+#rightPanel{flex:1;position:relative;background:#0c0e12;min-width:0}
+#guiCanvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:auto;cursor:crosshair;touch-action:none}
+#imeInput{position:absolute;opacity:0;pointer-events:none;font-size:16px}
+#statusbar{height:26px;display:flex;align-items:center;gap:14px;padding:0 12px;font-size:12px;
+  border-top:1px solid var(--line);background:var(--panel);color:var(--dim);white-space:nowrap;overflow:hidden}
+#statusbar .ok{color:var(--ok)} #statusbar .warn{color:var(--warn)} #statusbar .err{color:var(--err)}
+#toast{position:fixed;right:16px;bottom:40px;display:flex;flex-direction:column;gap:8px;z-index:100;max-width:380px}
+.toast-item{background:#222a36;border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:6px;
+  padding:8px 12px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.4);animation:tin .18s ease}
+.toast-item.ok{border-left-color:var(--ok)} .toast-item.warn{border-left-color:var(--warn)} .toast-item.err{border-left-color:var(--err)}
+@keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.popover{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);border:1px solid var(--line);
+  border-radius:8px;padding:10px;min-width:230px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:60;display:none}
+.popover.open{display:block}
+.popover .row{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12.5px}
+.popover .row label{width:86px;color:var(--dim);flex:none}
+.popover .row input[type=color]{width:34px;height:24px;border:none;background:none;padding:0}
+.menu-item{display:block;width:100%;text-align:left;padding:7px 10px;border:none;background:none;border-radius:5px}
+.menu-item:hover{background:var(--panel2);color:#fff}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:90}
+.modal.open{display:flex}
+.modal-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;max-width:520px;width:90%;max-height:80vh;overflow:auto}
+.modal-box h3{margin:0 0 10px;font-size:15px}
+.modal-box .qr-url{word-break:break-all;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px;color:var(--acc);margin:8px 0}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+#slotList{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.slot-row{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.slot-row img{width:64px;height:auto;border-radius:2px;background:#c9ccbe;image-rendering:pixelated}
+.slot-row .nm{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#kbdGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+#kbdGrid button{padding:8px;font-size:11px;overflow:hidden;text-overflow:ellipsis}
+.kbd-press{box-shadow:inset 0 0 0 2px var(--acc)!important;background:#2b6cb0!important;color:#fff!important}
+/* ============ 模型库 / 文件导入 ============ */
+.lib-box{max-width:660px;width:94%}
+#libList{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin:10px 0;max-height:34vh;overflow:auto}
+.lib-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:5px;cursor:pointer}
+.lib-card:hover,.lib-card.active{border-color:var(--acc)}
+.lib-card .nm{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-card .hw{font-size:11px;color:var(--dim)}
+.lib-card .src{font-size:10.5px;color:var(--acc)}
+.lib-card .acts{display:flex;gap:6px;margin-top:2px}
+.lib-card .acts button{flex:1;padding:6px 4px;font-size:11.5px}
+.lib-card .acts .del{background:#3a2430;border-color:#5a3a44;color:#ff9a9a}
+.lib-empty{color:var(--dim);text-align:center;padding:16px 0;font-size:12.5px}
+.lib-divider{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:12px;margin:12px 0 8px}
+.lib-divider::before,.lib-divider::after{content:'';flex:1;height:1px;background:var(--line)}
+.mode-row{display:flex;flex-wrap:wrap;gap:8px 14px;padding:4px 0 10px;font-size:12.5px}
+.mode-row label{display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--text)}
+.mode-row input{accent-color:var(--acc)}
+#impArea{margin-top:2px}
+#pickBtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#pickBtns .full{grid-column:1/-1}
+#pickBtns button{padding:11px 6px;font-size:12.5px;min-height:44px}
+.file-list{margin:10px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;max-height:30vh;overflow-y:auto}
+.file-row{display:flex;align-items:center;gap:8px;padding:9px 10px;font-size:12.5px;border-bottom:1px solid var(--line);background:var(--panel2)}
+.file-row:last-child{border-bottom:none}
+.file-row input{width:16px;height:16px;accent-color:var(--acc);flex:none}
+.file-row .fn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-row .fs{color:var(--dim);font-size:11px;flex:none}
+.tag{font-size:10px;padding:1px 6px;border-radius:9px;flex:none;font-weight:600}
+.tag.req{background:#4a2430;color:#ff8f8f}
+.tag.rec{background:#1f3a5c;color:#7cc0ff}
+.tag.opt{background:#333a46;color:#9aa7bd}
+.sel-bar{display:flex;gap:8px;margin:8px 0}
+.sel-bar button{flex:1;padding:11px 6px;font-size:12.5px;min-height:44px}
+.sel-bar button.primary{background:#2b6cb0;border-color:#3a7fc7}
+#dropZone{border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;color:var(--dim);
+  font-size:12px;margin-top:10px;transition:.15s}
+#dropZone.drag{border-color:var(--acc);background:rgba(77,163,255,.08);color:var(--text)}
+#dirStatus{font-size:11.5px;color:var(--dim);margin-top:8px;min-height:15px;word-break:break-all}
+/* ============ 调试板全屏弹层 ============ */
+#guiModal{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;flex-direction:column;z-index:95;padding-top:env(safe-area-inset-top)}
+#guiModal.open{display:flex}
+#guiModal .gui-head{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+#guiModal .gui-head .t{font-weight:600;font-size:13px;color:var(--text)}
+#guiModal .gui-head .sp{flex:1}
+#guiModal .gui-body{flex:1;position:relative;background:#0c0e12;min-height:0}
+#guiModal #guiCanvasFull{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+/* 面板内的常驻调试画布（桌面端） */
+#rightPanel{display:flex;flex-direction:column}
+#rightPanel .rp-head{display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;color:var(--dim);
+  border-bottom:1px solid var(--line);flex:0 0 auto;background:var(--panel)}
+#rightPanel .rp-body{flex:1;position:relative;min-height:0}
+#guiIdle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--dim);font-size:13px;text-align:center;padding:20px;pointer-events:none}
+
+/* ============ 响应式（安卓/移动端） ============ */
+@media (max-width:1000px){
+  #main{flex-direction:column;overflow:auto}
+  #leftPanel{width:100%;border-right:none;border-bottom:1px solid var(--line)}
+  #rightPanel{height:58vh;min-height:320px}
+}
+/* 窄屏：默认隐藏右侧常驻面板，改由"调试板"全屏按钮查看 */
+@media (max-width:760px){
+  #rightPanel{display:none}
+}
+@media (max-width:760px){
+  html,body{overflow:auto;height:auto;min-height:100%}
+  #topbar{gap:6px;padding:6px 8px;position:sticky;top:0}
+  #topbar button{padding:7px 9px;min-height:40px}
+  .transport{overflow-x:auto;max-width:100%;flex-wrap:nowrap;padding-bottom:2px}
+  .transport::-webkit-scrollbar{height:0}
+  #modelSelect{min-width:110px;flex:1;max-width:none}
+  #main{height:auto;min-height:calc(100vh - 84px)}
+  #leftPanel{padding:8px;gap:8px}
+  #statusbar{height:auto;flex-wrap:wrap;gap:6px 12px;padding:6px 10px;white-space:normal;overflow:visible}
+  .modal-box{max-width:97%;width:97%;max-height:88vh;padding:12px}
+  .popover{position:fixed;left:8px;right:8px;top:auto;bottom:8px;min-width:0;max-height:72vh;overflow:auto}
+  .brand{font-size:13px}
+  #kbdCanvas{max-height:none;width:auto;max-width:100%;height:auto}
+  #libList{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));max-height:30vh}
+  .mode-row{gap:6px 10px;font-size:12px}
+  #pickBtns{grid-template-columns:1fr}
+  #pickBtns .full{grid-column:auto}
+  .file-row{font-size:12px;padding:10px 8px}
+  .sel-bar button{min-height:46px}
+  #toast{left:10px;right:10px;bottom:12px;max-width:none}
+  .slot-row{flex-wrap:wrap}
+  /* —— 安卓触摸优化 —— */
+  select,input[type=number],input[type=text]{font-size:16px!important;min-height:38px}
+  .popover .row{flex-wrap:wrap}
+  .popover .row label{width:86px}
+  button{padding:9px 12px}
+  #btnSettings{min-height:40px}
+  .modal-box h3{font-size:16px}
+  .lib-card .acts button{min-height:38px}
+  #kbdWrap{max-height:none;overflow:visible}
+  #topbar .brand{flex:1 1 auto}
+  #topbar{row-gap:8px}
+}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">Casio<b>Emu</b> Web</div>
+  <select id="modelSelect" title="已导入的型号"></select>
+  <button id="btnImport" class="primary">＋ 模型库 / 导入</button>
+  <input type="file" id="folderInput" webkitdirectory multiple hidden>
+  <input type="file" id="filesInput" multiple hidden>
+  <input type="file" id="zipInput" accept=".zip,application/zip" hidden>
+  <div class="sep"></div>
+  <div class="transport">
+    <button id="btnRun" disabled data-i18n="run">▶ 运行</button>
+    <button id="btnPause" disabled data-i18n="pause">⏸ 暂停</button>
+    <button id="btnReset" disabled data-i18n="reset">⟲ 复位</button>
+    <div class="sep"></div>
+    <button id="btnSnapSave" disabled data-i18n="snap_save_btn">快照存档</button>
+    <button id="btnSnapLoad" disabled data-i18n="snap_load_btn">快照读档</button>
+    <button id="btnRamSave" disabled data-i18n="ram_save_btn">保存RAM</button>
+    <button id="btnRamLoad" disabled data-i18n="ram_load_btn">加载RAM</button>
+    <div class="sep"></div>
+    <button id="btnKbd" disabled data-i18n="kbd_btn">键盘注入</button>
+    <button id="btnGui" disabled>🖥 调试板</button>
+    <button id="btnQr" disabled style="display:none">QR</button>
+  </div>
+  <div style="position:relative;margin-left:auto">
+    <button id="btnSettings">⚙ 设置</button>
+    <div class="popover" id="settingsPanel">
+      <div class="row"><label data-i18n="set_lang">界面语言</label>
+        <select id="setLang"><option value="zh">中文</option><option value="en">English</option></select></div>
+      <div class="row"><label data-i18n="set_scale">LCD 缩放</label>
+        <select id="setScale"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option><option value="6">6×</option></select></div>
+      <div class="row"><label data-i18n="set_color">显示颜色</label><input type="color" id="setColor" value="#000000"></div>
+      <div class="row"><label data-i18n="set_shadow">屏幕残影</label>
+        <select id="setShadow"><option value="1" selected>开</option><option value="0">关</option></select></div>
+      <div class="row"><label data-i18n="set_battery">电池电压</label>
+        <input type="number" id="setBattery" min="0" max="4" step="0.05" value="1.5" style="width:70px"></div>
+      <div class="row"><label data-i18n="set_solar">太阳能电压</label>
+        <input type="number" id="setSolar" min="0" max="4" step="0.05" value="1.5" style="width:70px"></div>
+      <div class="row"><label data-i18n="set_refresh">刷新间隔</label>
+        <input type="number" id="setRefresh" min="5" max="2000" step="1" value="16" style="width:70px"><span>ms</span></div>
+      <div class="row" style="color:var(--dim);font-size:11px;line-height:1.4">
+        <span data-i18n="set_refresh_hint">每 N 毫秒刷新一次计算器内存，值越大越省电、越流畅；值越小越跟手。</span></div>
+    </div>
+  </div>
+</header>
+
+<div id="main">
+  <div id="leftPanel">
+    <div id="kbdWrap">
+      <div id="kbdStage">
+        <canvas id="kbdCanvas" width="400" height="200"></canvas>
+        <canvas id="lcdCanvas" width="384" height="128"></canvas>
+      </div>
+      <div id="kbdHint">导入含界面图的模块包后显示键盘；点击键位或使用电脑键盘输入</div>
+    </div>
+    <div id="lcdWrap" style="display:none"><canvas id="lcdCanvasStandalone"></canvas></div>
+  </div>
+  <div id="rightPanel">
+    <div class="rp-head"><span>🖥 调试板（GUI）</span><span class="sp" style="flex:1"></span>
+      <button id="btnGuiFull" style="padding:2px 8px;font-size:12px">全屏</button></div>
+    <div class="rp-body">
+      <canvas id="guiCanvas"></canvas>
+      <div id="guiIdle">点击顶部 "🖥 调试板" 按钮启用调试窗口</div>
+    </div>
+    <input id="imeInput" autocomplete="off">
+  </div>
+</div>
+
+<!-- 调试板全屏弹层 -->
+<div id="guiModal">
+  <div class="gui-head"><span class="t">🖥 调试板</span><span class="sp"></span>
+    <button id="btnGuiResize">重挂载</button>
+    <button id="btnGuiClose">关闭</button></div>
+  <div class="gui-body"><canvas id="guiCanvasFull"></canvas></div>
+</div>
+
+<footer id="statusbar">
+  <span id="stModel"></span><span id="stRom"></span><span id="stState"></span><span id="stCpu"></span><span id="stMsg"></span>
+</footer>
+
+<div id="toast"></div>
+
+<div class="modal" id="qrModal"><div class="modal-box">
+  <h3 data-i18n="qr_title">QR 码内容</h3>
+  <div class="qr-url" id="qrUrl"></div>
+  <div class="modal-actions">
+    <button id="qrCopy" data-i18n="qr_copy">复制链接</button>
+    <a id="qrOpen" target="_blank" rel="noopener"><button data-i18n="qr_open">打开链接</button></a>
+    <button id="qrClose" data-i18n="common_close">关闭</button>
+  </div>
+</div></div>
+
+<div class="modal" id="slotModal"><div class="modal-box">
+  <h3 data-i18n="snap_title">快照</h3>
+  <div class="row"><label data-i18n="snap_name">名称</label>
+    <input type="text" id="slotName" style="flex:1" value="snap1"></div>
+  <div class="modal-actions">
+    <button id="slotSave" data-i18n="snap_save">保存当前状态</button>
+    <button id="slotExport" data-i18n="snap_export">导出 .snapshot 文件</button>
+    <button id="slotImport" data-i18n="snap_import">导入 .snapshot 文件</button>
+    <button id="slotClose" data-i18n="common_close">关闭</button>
+  </div>
+  <div id="slotList"></div>
+</div></div>
+
+<div class="modal" id="kbdModal"><div class="modal-box">
+  <h3 data-i18n="kbd_title">键盘注入（按 KI/KO 矩阵坐标按键）</h3>
+  <div class="row">
+    <label>KI (0-7)</label><input type="number" id="kbdKi" min="0" max="7" value="0" style="width:64px">
+    <label>KO (0-15)</label><input type="number" id="kbdKo" min="0" max="15" value="0" style="width:64px">
+    <button id="kbdPress">按下</button><button id="kbdRelease">释放</button>
+  </div>
+  <div id="kbdGrid"></div>
+  <div class="modal-actions"><button id="kbdClose" data-i18n="common_close">关闭</button></div>
+</div></div>
+
+<div class="modal" id="libModal"><div class="modal-box lib-box">
+  <h3 data-i18n="lib_title">模型库</h3>
+  <div id="libList"></div>
+  <div class="lib-divider" data-i18n="lib_import">导入新模型</div>
+  <div class="mode-row">
+    <label><input type="radio" name="impMode" value="folder" checked><span data-i18n="mode_folder">逐个文件导入</span></label>
+    <label><input type="radio" name="impMode" value="zip"><span data-i18n="mode_zip">导入压缩包</span></label>
+    <label><input type="radio" name="impMode" value="files"><span data-i18n="mode_files">导入多个文件</span></label>
+    <label><input type="radio" name="impMode" value="dir"><span data-i18n="mode_dir">从 models 目录载入</span></label>
+  </div>
+  <div id="impArea"></div>
+  <div id="dirStatus"></div>
+  <div class="modal-actions"><button id="libClose" data-i18n="common_close">关闭</button></div>
+</div></div>
+
+<div class="modal" id="bareModal"><div class="modal-box">
+  <h3 data-i18n="bare_title">裸 ROM 启动</h3>
+  <div class="row"><label data-i18n="bare_type">硬件型号</label>
+    <select id="bareType">
+      <option value="4">HW_CLASSWIZ (fx-991CN X / fx-991EX)</option>
+      <option value="5">HW_CLASSWIZ_II</option>
+      <option value="3">HW_ES_PLUS</option>
+      <option value="6">HW_FX_5800P（需 flash）</option>
+      <option value="7">HW_TI</option>
+      <option value="8">HW_SOLARII</option>
+      <option value="9">HW_EPS6800</option>
+      <option value="10">HW_EPS6009</option>
+      <option value="11">HW_EPS9500</option>
+      <option value="12">HW_EPS6800_W192</option>
+    </select></div>
+  <div class="row"><label>PD 值</label><input type="number" id="barePd" value="0" min="0" max="255" style="width:70px"></div>
+  <div class="row"><label data-i18n="bare_real">真实硬件</label>
+    <select id="bareReal"><option value="1">是（限速）</option><option value="0">否（全速）</option></select></div>
+  <div class="row"><label>ROM</label><input type="file" id="bareRom" accept=".bin,.*"></div>
+  <div class="row" id="bareFlashRow" style="display:none"><label>Flash</label><input type="file" id="bareFlash" accept=".bin,.*"></div>
+  <div class="modal-actions"><button id="bareGo" data-i18n="bare_go">启动</button>
+    <button id="bareClose" data-i18n="common_close">关闭</button></div>
+</div></div>
+
+<script src="CasioEmuCore.js"></script>
+<script>
+'use strict';
+/* ================= 工具 ================= */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+let toastSeq=0;
+function toast(msg,type){
+  const el=document.createElement('div');el.className='toast-item '+(type||'');
+  el.textContent=msg;$('toast').appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),350)},4200);
+}
+function downloadBlob(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function readCStr(u8,off){let e=off;while(e<u8.length&&u8[e])e++;return new TextDecoder().decode(u8.subarray(off,e))}
+function sanitizeId(s){return String(s||'').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,60)||'model'}
+
+/* ================= i18n ================= */
+const I18N={
+ zh:{set_lang:'界面语言',set_scale:'LCD 缩放',set_color:'显示颜色',set_shadow:'屏幕残影',set_battery:'电池电压',set_solar:'太阳能电压',
+  qr_title:'QR 码内容',qr_copy:'复制链接',qr_open:'打开链接',common_close:'关闭',
+  snap_title:'快照',snap_name:'名称',snap_save:'保存当前状态',snap_export:'导出 .snapshot 文件',snap_import:'导入 .snapshot 文件',snap_close:'关闭',
+  kbd_title:'键盘注入（KI/KO 矩阵坐标按键）',kbd_close:'关闭',
+  bare_title:'裸 ROM 启动',bare_type:'硬件型号',bare_real:'真实硬件',bare_go:'启动',bare_close:'关闭',
+  st_run:'运行中',st_pause:'已暂停',st_stop:'未启动',st_noModel:'未加载型号',st_loading:'加载核心中…',
+  imp_done:'模块包已导入',imp_fail:'导入失败',imp_needRom:'模块包缺少 ROM 文件',imp_badCfg:'config 解析失败',
+  run:'▶ 运行',pause:'⏸ 暂停',reset:'⟲ 复位',snap_saved:'快照已保存',snap_loaded:'快照已载入',snap_empty:'没有快照',
+  snap_save_btn:'快照存档',snap_load_btn:'快照读档',ram_save_btn:'保存RAM',ram_load_btn:'加载RAM',kbd_btn:'键盘注入',
+  ram_saved:'RAM 已保存',ram_loaded:'RAM 已载入',
+  core_err:'核心初始化失败',core_ready:'核心就绪，请导入模块包',
+  gui_zh:'中文',gui_en:'English',qr_new:'检测到 QR 内容',
+  lib_title:'模型库',lib_import:'导入新模型',lib_empty:'还没有模型，请从下方导入或从 models 目录载入',
+  lib_start:'启动',lib_del:'删除',lib_src_idb:'已导入',lib_src_dir:'models 目录',lib_scanning:'正在扫描 models 目录…',
+  lib_dir_ok:'已从 models 目录载入 {n} 个模型',lib_dir_fail:'读取 models 目录失败: {msg}',
+  lib_dir_denied:'未获得目录访问权限，请重新授权',lib_no_support:'此浏览器不支持目录读取，请改用「导入压缩包」或「导入多个文件」',
+  mode_folder:'逐个文件导入',mode_zip:'导入压缩包',mode_files:'导入多个文件',mode_dir:'从 models 目录载入',
+  pick_folder:'选择文件夹（列出其中文件）',pick_zip:'选择 ZIP 模块包',pick_files:'选择多个文件',pick_dir:'选择 models 目录',
+  sel_all:'全选',sel_none:'取消全选',imp_sel:'导入选中文件',
+  drop_zone:'也可拖拽 文件夹 / ZIP / ROM 文件到此处',
+  tag_req:'必选',tag_rec:'推荐',tag_opt:'可选',
+  no_sel:'请先勾选要导入的文件',sel_need_rom:'请勾选 rom.bin（必选）',sel_no_rom:'选中文件缺少 rom.bin，已按模拟模式启动',
+  imp_bare_btn:'裸 ROM（手动选型号）',imp_bare_hint:'未含 config，已按模拟模式启动',
+  set_refresh:'刷新间隔',set_refresh_hint:'每 N 毫秒刷新一次计算器内存，值越大越省电、越流畅；值越小越跟手。',scanning_btn:'扫描 models 目录'},
+ en:{set_lang:'Language',set_scale:'LCD scale',set_color:'Display color',set_shadow:'Screen ghosting',set_battery:'Battery V',set_solar:'Solar V',
+  qr_title:'QR content',qr_copy:'Copy URL',qr_open:'Open URL',common_close:'Close',
+  snap_title:'Snapshots',snap_name:'Name',snap_save:'Save state',snap_export:'Export .snapshot',snap_import:'Import .snapshot',snap_close:'Close',
+  kbd_title:'Keyboard inject (KI/KO)',kbd_close:'Close',
+  bare_title:'Bare ROM',bare_type:'Hardware',bare_real:'Real hardware',bare_go:'Start',bare_close:'Close',
+  st_run:'Running',st_pause:'Paused',st_stop:'Not running',st_noModel:'No model',st_loading:'Loading core…',
+  imp_done:'Model imported',imp_fail:'Import failed',imp_needRom:'Model package is missing ROM',imp_badCfg:'Config parse failed',
+  run:'▶ Run',pause:'⏸ Pause',reset:'⟲ Reset',snap_saved:'Snapshot saved',snap_loaded:'Snapshot loaded',snap_empty:'No snapshots',
+  snap_save_btn:'Snapshot',snap_load_btn:'Load snap',ram_save_btn:'Save RAM',ram_load_btn:'Load RAM',kbd_btn:'Keyboard',
+  ram_saved:'RAM saved',ram_loaded:'RAM loaded',
+  core_err:'Core init failed',core_ready:'Core ready, import a model package',
+  gui_zh:'Chinese',gui_en:'English',qr_new:'QR detected',
+  lib_title:'Model library',lib_import:'Import new model',lib_empty:'No models yet — import below or load from models dir',
+  lib_start:'Start',lib_del:'Delete',lib_src_idb:'Imported',lib_src_dir:'models dir',lib_scanning:'Scanning models dir…',
+  lib_dir_ok:'Loaded {n} models from models dir',lib_dir_fail:'Failed to read models dir: {msg}',
+  lib_dir_denied:'Permission denied, please grant access again',lib_no_support:'Directory reading unsupported in this browser — use ZIP or multi-file import',
+  mode_folder:'Import files one by one',mode_zip:'Import archive',mode_files:'Import multiple files',mode_dir:'Load from models dir',
+  pick_folder:'Pick folder (list files)',pick_zip:'Pick ZIP package',pick_files:'Pick multiple files',pick_dir:'Pick models directory',
+  sel_all:'Select all',sel_none:'Deselect all',imp_sel:'Import selected',
+  drop_zone:'Or drag & drop folder / ZIP / ROM here',
+  tag_req:'required',tag_rec:'recommended',tag_opt:'optional',
+  no_sel:'Select at least one file',sel_need_rom:'Select rom.bin (required)',sel_no_rom:'No rom.bin selected — started in sim mode',
+  imp_bare_btn:'Bare ROM (manual)',imp_bare_hint:'No config — started in sim mode',
+  set_refresh:'Refresh ms',set_refresh_hint:'Refresh calculator memory every N ms. Higher = smoother & less battery; lower = more responsive.',scanning_btn:'Scan models dir'}};
+let L='zh';
+const T=(k,args)=>{let s=(I18N[L]&&I18N[L][k])||k;if(args)s=s.replace(/\{(\w+)\}/g,(m,p)=>args[p]??m);return s};
+function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=T(el.dataset.i18n)})}
+function setLang(l){L=l;applyI18n();$('setLang').value=l;if(coreReady&&Module){core('casioemu_core_gui_set_locale',['string'],[l==='zh'?'zh_CN':'en_US'],'number')}}
+
+/* ================= SDL 键码 ================= */
+const SDLK={UP:1073741906,DOWN:1073741905,RIGHT:1073741903,LEFT:1073741904,HOME:1073741898,END:1073741901,
+ PAGEUP:1073741899,PAGEDOWN:1073741902,INSERT:1073741897,DELETE:127,BACKSPACE:8,RETURN:13,ESCAPE:27,TAB:9,SPACE:32,
+ KP_ENTER:1073741912,KP_DIVIDE:1073741908,KP_MULTIPLY:1073741909,KP_MINUS:1073741910,KP_PLUS:1073741911,
+ KP_PERIOD:1073741923,KP_0:1073741922,KP_1:1073741913,KP_2:1073741914,KP_3:1073741915,KP_4:1073741916,
+ KP_5:1073741917,KP_6:1073741918,KP_7:1073741919,KP_8:1073741920,KP_9:1073741921};
+for(let i=1;i<=15;i++)SDLK['F'+i]=1073741881+i;
+function sdlNameToCode(name){ // 近似 SDL_GetKeyFromName（字母键码为小写 ASCII，与 SDL 一致）
+  if(!name)return -1;
+  const n=String(name);
+  if(n.length===1){const c=n.charCodeAt(0);
+    if(c>=65&&c<=90)return c+32;
+    return c>31&&c<127?c:-1}
+  if(SDLK[n]!==undefined)return SDLK[n];
+  if(/^F\d+$/.test(n)){const f=parseInt(n.slice(1),10);return f>=1&&f<=15?1073741881+f:-1}
+  const kp=/^Keypad (.+)$/.exec(n);
+  if(kp){const k=kp[1];
+    if(k==='Enter')return SDLK.KP_ENTER;if(k==='/')return SDLK.KP_DIVIDE;if(k==='*')return SDLK.KP_MULTIPLY;
+    if(k==='-')return SDLK.KP_MINUS;if(k==='+')return SDLK.KP_PLUS;if(k==='.')return SDLK.KP_PERIOD;
+    if(/^\d$/.test(k))return k==='0'?SDLK.KP_0:SDLK['KP_'+k];
+    const c=k.charCodeAt(0);if(k.length===1&&c>31&&c<127)return c;return -1}
+  const single={Return:13,Enter:13,Backspace:8,Delete:127,Escape:27,Space:32,Tab:9,Up:SDLK.UP,Down:SDLK.DOWN,
+    Right:SDLK.RIGHT,Left:SDLK.LEFT,Home:SDLK.HOME,End:SDLK.END,PageUp:SDLK.PAGEUP,PageDown:SDLK.PAGEDOWN,Insert:SDLK.INSERT};
+  if(single[n]!==undefined)return single[n];
+  if(n==='Keypad Enter')return SDLK.KP_ENTER;
+  return -1;
+}
+function domKeyToSDL(e){
+  const k=e.key;
+  if(k==='Unidentified'||k==='Shift'||k==='Control'||k==='Alt'||k==='Meta'||k==='CapsLock')return -1;
+  if(e.code&&e.code.startsWith('Numpad')){
+    const c=e.code.slice(6);
+    if(c==='Enter')return SDLK.KP_ENTER;if(c==='Divide')return SDLK.KP_DIVIDE;if(c==='Multiply')return SDLK.KP_MULTIPLY;
+    if(c==='Subtract')return SDLK.KP_MINUS;if(c==='Add')return SDLK.KP_PLUS;if(c==='Decimal')return SDLK.KP_PERIOD;
+    if(/^\d$/.test(c))return c==='0'?SDLK.KP_0:SDLK['KP_'+c];
+    return -1}
+  if(k.length===1){const c=k.codePointAt(0);
+    if(c>=65&&c<=90)return c+32; // SDL 字母键码不分大小写
+    return (c>=32&&c<127)?c:-1}
+  switch(k){
+    case'ArrowUp':return SDLK.UP;case'ArrowDown':return SDLK.DOWN;case'ArrowRight':return SDLK.RIGHT;case'ArrowLeft':return SDLK.LEFT;
+    case'Home':return SDLK.HOME;case'End':return SDLK.END;case'PageUp':return SDLK.PAGEUP;case'PageDown':return SDLK.PAGEDOWN;
+    case'Insert':return SDLK.INSERT;case'Enter':return 13;case'Backspace':return 8;case'Tab':return 9;case'Escape':return 27;
+    case'Delete':return 127;case' ':return 32;
+    default:if(/^F\d+$/.test(k)){const f=parseInt(k.slice(1),10);return f>=1&&f<=15?1073741881+f:-1}return -1}
+}
+
+/* ================= BinaryReader (config.bin) ================= */
+class BinReader{
+  constructor(u8){this.v=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);this.o=0;this.bytes=u8;this.len=u8.byteLength;this.eof=false}
+  get remain(){return this.len-this.o}
+  has(n){return this.o+n<=this.len}
+  u8(){if(!this.has(1)){this.eof=true;return 0}const v=this.v.getUint8(this.o);this.o+=1;return v}
+  u16(){if(!this.has(2)){this.eof=true;return 0}const v=this.v.getUint16(this.o,true);this.o+=2;return v}
+  i32(){if(!this.has(4)){this.eof=true;return 0}const v=this.v.getInt32(this.o,true);this.o+=4;return v}
+  u32(){if(!this.has(4)){this.eof=true;return 0}const v=this.v.getUint32(this.o,true);this.o+=4;return v}
+  u64(){if(!this.has(8)){this.eof=true;return 0}const v=this.v.getBigUint64(this.o,true);this.o+=8;return Number(v)}
+  f64(){if(!this.has(8)){this.eof=true;return 1}const v=this.v.getFloat64(this.o,true);this.o+=8;return v}
+  bool(){return this.u8()!==0}
+  str(){const n=this.u64();if(n>this.remain||n<0){this.eof=true;return ''}const s=new TextDecoder().decode(this.bytes.subarray(this.o,this.o+n));this.o+=n;return s}
+  bytes(n){if(!this.has(n)){this.eof=true;return new Uint8Array(0)}const b=this.bytes.slice(this.o,this.o+n);this.o+=n;return b}
+  vec(){const n=this.u64();if(n<0||n>this.remain+1||n>1000000){this.eof=true;return []}const a=[];for(let i=0;i<n;i++)a.push(i);return a}
+}
+function parseConfigBin(bytes){
+  const r=new BinReader(bytes);
+  const header=r.str();
+  const hm=/Emulator Configuration file v(\d+)/.exec(header);
+  if(!hm)
+    throw new Error('不是合法的 config.bin（文件头不匹配: '+header.slice(0,30).replace(/\n/g,'\\n')+'）');
+  const ver=parseInt(hm[1],10)||0;
+  const cfg={};
+  cfg._version=ver;
+  cfg.csr_mask=r.u16();
+  cfg.hardware_id=r.u16();
+  cfg.real_hardware=r.bool();
+  cfg.pd_value=r.u8();
+  cfg.buttons=r.vec().map(()=>({rect:{x:r.i32(),y:r.i32(),w:r.i32(),h:r.i32()},kiko:r.i32(),keyname:r.str()}));
+  cfg.sprites={};r.vec().forEach(()=>{const k=r.str();cfg.sprites[k]={src:{x:r.i32(),y:r.i32(),w:r.i32(),h:r.i32()},dest:{x:r.i32(),y:r.i32(),w:r.i32(),h:r.i32()}}});
+  cfg.ink_color={r:r.i32(),g:r.i32(),b:r.i32()};
+  cfg.interface_path=r.str();
+  cfg.model_name=r.str();
+  cfg.rom_path=r.str();
+  cfg.flash_path=r.str();
+  // —— 以下字段在旧版本（v51 及更早）可能不存在；逐项安全读取，越界即停止并保留默认值 ——
+  cfg.enable_new_screen=false;
+  cfg.is_sample_rom=false;
+  cfg.legacy_ko=false;
+  // 旧版（v51 及更早）没有 u16_mode 字段，按硬件型号推断（CLASSWIZ / TI / FX5800P 为 u16 位宽）
+  cfg.u16_mode=[4,5,7].includes(cfg.hardware_id);
+  cfg.LARGE_model=true;
+  cfg.ml620_mirroring=true;
+  cfg.extra={};
+  cfg.status_sprite_indexes={};
+  cfg.button_svg_shapes=[];
+  cfg.button_svg_defs=[];
+  cfg.sprite_svg_shapes={};
+  cfg.sprite_svg_defs={};
+  cfg.board_path='';
+  cfg.screen_width=0;
+  cfg.screen_height=0;
+  cfg.screen_scale_y=1;
+  cfg.status_indicators=[];
+  if(r.eof)return cfg;
+  // 6 个开关（v52+ 才有；v51 及更早按硬件型号推断）
+  if(ver>=52&&r.remain>=6){
+    cfg.enable_new_screen=r.bool();
+    cfg.is_sample_rom=r.bool();
+    cfg.legacy_ko=r.bool();
+    cfg.u16_mode=r.bool();
+    cfg.LARGE_model=r.bool();
+    cfg.ml620_mirroring=r.bool();
+  }else{
+    return cfg; // 旧版本：后续字段不存在
+  }
+  if(r.eof||r.remain<8)return cfg;
+  // extra map
+  r.vec().forEach(()=>{const k=r.str();cfg.extra[k]=r.str()});
+  if(r.eof)return cfg;
+  // status_sprite_indexes map
+  r.vec().forEach(()=>{const k=r.str();cfg.status_sprite_indexes[k]=r.i32()});
+  if(r.eof)return cfg;
+  // svg 字段
+  cfg.button_svg_shapes=r.vec().map(()=>r.str());
+  if(r.eof)return cfg;
+  cfg.button_svg_defs=r.vec().map(()=>r.str());
+  if(r.eof)return cfg;
+  r.vec().forEach(()=>{const k=r.str();cfg.sprite_svg_shapes[k]=r.str()});
+  if(r.eof)return cfg;
+  r.vec().forEach(()=>{const k=r.str();cfg.sprite_svg_defs[k]=r.str()});
+  if(r.eof)return cfg;
+  cfg.board_path=r.str();
+  if(r.eof)return cfg;
+  cfg.screen_width=r.i32();
+  cfg.screen_height=r.i32();
+  cfg.screen_scale_y=r.f64();
+  if(r.eof)return cfg;
+  cfg.status_indicators=r.vec().map(()=>({sprite_name:r.str(),byte_offset:r.u16(),bit:r.u8(),_pad:r.u8()}));
+  return cfg;
+}
+
+/* ================= config.json / ZIP ================= */
+function parseConfigJson(obj){
+  const cfg={};
+  cfg.hardware_id=obj.hardware_id;
+  cfg.real_hardware=!!obj.real_hardware;
+  cfg.pd_value=obj.pd_value||0;
+  cfg.csr_mask=obj.csr_mask??0;
+  cfg.legacy_ko=!!obj.legacy_ko;
+  cfg.is_sample_rom=!!obj.is_sample_rom;
+  cfg.enable_new_screen=!!obj.enable_new_screen;
+  cfg.u16_mode=!!obj.u16_mode;
+  cfg.LARGE_model=obj.LARGE_model??true;
+  cfg.ml620_mirroring=obj.ml620_mirroring??true;
+  cfg.model_name=obj.model_name||'';
+  cfg.interface_path=obj.interface_path||'';
+  cfg.board_path=obj.board_path||'';
+  cfg.rom_path=obj.rom_path||'';
+  cfg.flash_path=obj.flash_path||'';
+  cfg.screen_width=obj.screen_width||0;
+  cfg.screen_height=obj.screen_height||0;
+  cfg.screen_scale_y=obj.screen_scale_y??1.0;
+  cfg.ink_color=obj.ink_color?{r:obj.ink_color.r??0,g:obj.ink_color.g??0,b:obj.ink_color.b??0}:{r:0,g:0,b:0};
+  cfg.buttons=(obj.buttons||[]).map(b=>({rect:{x:b.rect.x,y:b.rect.y,w:b.rect.w,h:b.rect.h},kiko:b.kiko,keyname:b.keyname||''}));
+  cfg.sprites={};
+  for(const[k,v]of Object.entries(obj.sprites||{}))cfg.sprites[k]={src:{x:v.src.x,y:v.src.y,w:v.src.w,h:v.src.h},dest:{x:v.dest.x,y:v.dest.y,w:v.dest.w,h:v.dest.h}};
+  cfg.status_sprite_indexes=obj.status_sprite_indexes||{};
+  cfg.status_indicators=(obj.status||[]).map(s=>({sprite_name:s.sprite,byte_offset:s.byte,bit:s.bit,_pad:0}));
+  cfg.extra=obj.extra||{};
+  return cfg;
+}
+async function inflateRaw(u8){
+  if(typeof DecompressionStream==='undefined')throw new Error('浏览器不支持 DecompressionStream（请用新版 Chrome/Edge/Firefox）');
+  const ds=new DecompressionStream('deflate-raw');
+  const stream=new Blob([u8]).stream().pipeThrough(ds);
+  const buf=await new Response(stream).arrayBuffer();
+  return new Uint8Array(buf);
+}
+function parseZip(u8){
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  const end=u8.length;
+  let eocd=-1;
+  for(let i=end-22;i>=Math.max(0,end-22-65536);i--){
+    if(dv.getUint32(i,true)===0x06054b50){eocd=i;break}
+  }
+  if(eocd<0)throw new Error('不是有效的 ZIP 文件');
+  const cdCount=dv.getUint16(eocd+10,true);
+  const cdOffset=dv.getUint32(eocd+16,true);
+  const entries={};
+  let p=cdOffset;
+  for(let n=0;n<cdCount;n++){
+    if(dv.getUint32(p,true)!==0x02014b50)throw new Error('ZIP 中央目录损坏');
+    const method=dv.getUint16(p+10,true);
+    const compSize=dv.getUint32(p+20,true);
+    const uncompSize=dv.getUint32(p+24,true);
+    const nameLen=dv.getUint16(p+28,true);
+    const extraLen=dv.getUint16(p+30,true);
+    const commentLen=dv.getUint16(p+32,true);
+    const localOffset=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nameLen));
+    // local header
+    const lh=dv.getUint32(localOffset,true);
+    if(lh!==0x04034b50)throw new Error('ZIP 本地头损坏: '+name);
+    const lNameLen=dv.getUint16(localOffset+26,true);
+    const lExtraLen=dv.getUint16(localOffset+28,true);
+    const dataStart=localOffset+30+lNameLen+lExtraLen;
+    const data=u8.subarray(dataStart,dataStart+compSize);
+    entries[name]=method===0?data:null; // deflate 稍后解压
+    if(method===8)entries[name]=inflateRaw(data).catch(()=>null);
+    if(method!==0&&method!==8)entries[name]=null;
+    p+=46+nameLen+extraLen+commentLen;
+  }
+  return entries;
+}
+
+/* ================= IndexedDB（模型库 + RAM 持久化） ================= */
+const IDB_NAME='casioemu-web',IDB_VER=2;
+let idb=null;
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    if(idb)return res(idb);
+    try{
+      const req=indexedDB.open(IDB_NAME,IDB_VER);
+      req.onupgradeneeded=()=>{const db=req.result;
+        if(!db.objectStoreNames.contains('models'))db.createObjectStore('models',{keyPath:'id'});
+        if(!db.objectStoreNames.contains('ram'))db.createObjectStore('ram',{keyPath:'id'});
+        if(!db.objectStoreNames.contains('dir'))db.createObjectStore('dir',{keyPath:'id'});
+      };
+      req.onsuccess=()=>{idb=req.result;res(idb)};
+      req.onerror=()=>rej(req.error);
+    }catch(e){rej(e)}
+  });
+}
+async function idbPut(store,val){try{const db=await idbOpen();return new Promise((res,rej)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(val);t.oncomplete=res;t.onerror=()=>rej(t.error)})}catch(e){}}
+async function idbGet(store,key){try{const db=await idbOpen();return new Promise((res,rej)=>{const t=db.transaction(store,'readonly');const r=t.objectStore(store).get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}catch(e){return null}}
+async function idbAll(store){try{const db=await idbOpen();return new Promise((res,rej)=>{const t=db.transaction(store,'readonly');const r=t.objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}catch(e){return []}}
+async function idbDel(store,key){try{const db=await idbOpen();return new Promise((res,rej)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).delete(key);t.oncomplete=res;t.onerror=()=>rej(t.error)})}catch(e){}}
+
+/* ================= 模型包结构 ================= */
+// model = {id, name, cfg, rom:Uint8Array, flash:Uint8Array|null, iface:{blob,mime}|null, eps:bool}
+const models=[]; // 当前会话模型
+let currentModel=null;
+const EPS_HWS=new Set([9,10,11,12]);
+const HW_NAMES={3:'HW_ES_PLUS',4:'HW_CLASSWIZ',5:'HW_CLASSWIZ_II',6:'HW_FX_5800P',7:'HW_TI',8:'HW_SOLARII',9:'HW_EPS6800',10:'HW_EPS6009',11:'HW_EPS9500',12:'HW_EPS6800_W192'};
+
+async function buildModel(cfg,files){
+  // files: {name:Uint8Array|Blob|File}（不含 zip 前缀）
+  const model={id:sanitizeId(cfg.model_name||('hw'+cfg.hardware_id)),cfg,eps:EPS_HWS.has(cfg.hardware_id)};
+  model.name=cfg.model_name||HW_NAMES[cfg.hardware_id]||('HW '+cfg.hardware_id);
+  const findFile=(p)=>pickFile(files, p?[p]:[]);
+  // ROM：优先按 config 指定的 rom_path，再按常见名，最后兜底任何 .bin/.rom/.flash
+  let rom=findFile(cfg.rom_path)||pickFile(files,['rom.bin','rom','rom.fs'])||null;
+  if(!rom){
+    const vals=Object.values(files);
+    rom=vals.find(f=>{const n=String(f&&f.name||'').toLowerCase();return /\.(bin|rom)$/.test(n)&&/rom/.test(n)});
+    if(!rom)rom=vals.find(f=>{const n=String(f&&f.name||'').toLowerCase();return /\.(bin|rom|flash|fs)$/.test(n)&&!/config/.test(n)});
+  }
+  if(!rom)throw new Error('缺少 ROM 文件（'+cfg.rom_path+'）');
+  model.rom=await toBytes(rom);
+  const flash=findFile(cfg.flash_path)||pickFile(files,['spif.bin','flash.bin','spif.fs']);
+  if(flash)model.flash=await toBytes(flash);
+  // 界面图
+  let ifPath=cfg.interface_path||cfg.board_path;
+  let ifFile=ifPath?findFile(ifPath):null;
+  if(!ifFile){
+    ifFile=pickFile(files,['face.png','face.svg','interface.png','board.png','board.svg','keypad.png','face.jpg','interface.jpg','board.jpg']);
+  }
+  if(ifFile){
+    let nm=(ifFile.name&&ifFile.name.toLowerCase())||'';
+    const isSvg=nm.endsWith('.svg');
+    const mime=isSvg?'image/svg+xml':(nm.endsWith('.png')?'image/png':nm.endsWith('.jpg')||nm.endsWith('.jpeg')?'image/jpeg':ifFile.mime||'image/png');
+    const blob=ifFile instanceof Blob?ifFile:new Blob([ifFile],{type:mime});
+    model.iface={mime,blob};
+  }
+  return model;
+}
+async function awaitBlob(b){return new Uint8Array(await b.arrayBuffer())}
+function hexByte(v){return '0x'+v.toString(16).padStart(2,'0').toUpperCase()}
+
+/* ================= 核心封装 ================= */
+let Module=null,coreReady=false;
+function core(fn,types,args,ret){
+  if(!Module)throw new Error('核心未加载');
+  return Module.ccall(fn,ret||'number',types||[],args||[]);
+}
+function passBytes(u8){
+  const p=Module._malloc(u8.length||1);
+  if(u8.length)Module.HEAPU8.set(u8,p);
+  return p;
+}
+function readPtr(ptr,len){return Module.HEAPU8.slice(ptr,ptr+len)}
+
+/* ================= 状态 ================= */
+let emuRunning=false;      // 主循环运行中（前端视角）
+let guiAttached=false,guiW=0,guiH=0;
+let lcdScale=2,lcdW=0,lcdH=0;
+let pressedButtons=new Set();
+let guiFocus=false;        // 最后一次交互在 GUI 上
+let lastQr='',qrTimer=0;
+let snapshots=[];          // {name, bytes, preview}
+let snapshotSeq=1;
+
+/* ================= 核心加载 ================= */
+function initCore(){
+  if(typeof CasioEmuCoreModule==='undefined'){
+    toast('找不到 CasioEmuCore.js（请与 index.html 放在同一目录）','err');return;
+  }
+  CasioEmuCoreModule({locateFile:(path,prefix)=>prefix+path}).then(m=>{
+    Module=m;
+    // 挂载 /persist 到 IDBFS，GUI 的快照/文件可持久化
+    try{
+      Module.FS.mkdir('/persist');
+      Module.FS.mount(Module.IDBFS,{},'/persist');
+      Module.FS.syncfs(true,err=>{if(err)console.warn('IDBFS load:',err)});
+    }catch(e){console.warn('IDBFS setup:',e)}
+    coreReady=true;
+    toast(T('core_ready'),'ok');
+    setStatus('stModel',T('st_noModel'));
+    loadPersistedModels();
+    restoreModelsDir();
+  }).catch(e=>{
+    console.error(e);
+    toast(T('core_err')+': '+e,'err');
+    $('stMsg').textContent=String(e);
+  });
+}
+
+/* ================= 模型启动 ================= */
+function startModel(model){
+  try{
+    // 切换机型前先摘除 GUI：避免旧调试窗口在核心重建间隙渲染导致越界/卡死
+    if(guiAttached){
+      try{core('casioemu_core_gui_detach')}catch(e){}
+      guiAttached=false;
+      guiFailCount=0;
+      const gm=document.getElementById('guiModal');
+      if(gm)gm.classList.remove('open');
+      for(const id of ['guiCanvas','guiCanvasFull']){
+        const gc=document.getElementById(id);
+        if(gc&&gc.getContext){const g=gc.getContext('2d');g.clearRect(0,0,gc.width,gc.height)}
+      }
+      const idle=document.getElementById('guiIdle');if(idle)idle.style.display='';
+    }
+    // EPS 状态指示器 + 配置
+    if(model.eps){
+      const packed=new Int32Array(model.cfg.status_indicators.map(s=>(s.byte_offset<<8)|s.bit));
+      if(packed.length){
+        const p=passBytes(new Uint8Array(packed.buffer));
+        const rc=core('casioemu_core_set_status_indicators',['number','number'],[p,packed.length],'number');
+        Module._free(p);
+        if(rc)console.warn('set_status_indicators rc=',rc);
+      }
+      const ex=model.cfg.extra||{};
+      const bm=parseInt(ex.port_b_input_mask||'0x00',16),bv=parseInt(ex.port_b_input_value||'0x00',16);
+      const cm=parseInt(ex.port_c_input_mask||'0x00',16),cv=parseInt(ex.port_c_input_value||'0x00',16);
+      const cps=parseInt(ex.cycles_per_second||'0',10)||0, t1=parseInt(ex.timer1_source_hz||'0',10)||0, tcd=parseInt(ex.timer_cycle_divisor||'0',10)||0;
+      core('casioemu_core_set_eps_config',['number','number','number','number','number','number','number','number'],
+        [bm,bv,cm,cv,cps,t1,tcd,ex.ice_timer_scheduling==='1'?1:0],'number');
+    }
+    core('casioemu_core_set_model_id',['string'],[model.id],'number');
+    let rc;
+    if(model.flash){
+      const rp=passBytes(model.rom),fp=passBytes(model.flash);
+      rc=core('casioemu_core_init_real_rom_with_flash',['number','number','number','number','number','number'],
+        [rp,model.rom.length,fp,model.flash.length,model.cfg.pd_value||0,model.cfg.hardware_id,model.cfg.legacy_ko?1:0],'number');
+      Module._free(rp);Module._free(fp);
+    }else{
+      const rp=passBytes(model.rom);
+      rc=core('casioemu_core_init_real_rom',['number','number','number','number','number'],
+        [rp,model.rom.length,model.cfg.pd_value||0,model.cfg.hardware_id,model.cfg.legacy_ko?1:0],'number');
+      Module._free(rp);
+    }
+    if(rc!==0)throw new Error('核心初始化失败 rc='+rc);
+    // 绑定实体键盘
+    for(const b of model.cfg.buttons){
+      for(const nm of [b.keyname, kbdVariant(b.keyname)]){
+        const code=sdlNameToCode(nm);
+        if(code>=0)core('casioemu_core_bind_sdl_key',['number','number'],[code,b.kiko],'number');
+      }
+    }
+    // 设置
+    core('casioemu_core_set_display_color',['number','number','number'],displayColor(),'number');
+    core('casioemu_core_set_screen_shadow',['number','double'],[screenShadow?1:0,1.0],'number');
+    core('casioemu_core_set_battery_voltage',['double'],[parseFloat($('setBattery').value)||1.5],'number');
+    core('casioemu_core_set_solar_voltage',['double'],[parseFloat($('setSolar').value)||1.5],'number');
+    core('casioemu_core_gui_set_locale',['string'],[L==='zh'?'zh_CN':'en_US'],'number');
+
+    currentModel=model;
+    loadInterface(model);
+    emuRunning=false;
+    // 不自动重挂 GUI：跨型号切换后旧调试窗口可能失效，需要时手动开启（renderGui 有连续失败自动摘除兜底）
+    // 首次帧
+    updateFrameOnce();
+    setModelInfo();
+    restoreRam(model);
+    start();
+    toast('✔ '+model.name);
+  }catch(e){
+    console.error(e);
+    toast(T('imp_fail')+': '+e.message,'err');
+  }
+}
+function kbdVariant(name){ // 对应 Keyboard.cpp 的双重绑定
+  if(!name)return'';
+  if(name.startsWith('Keypad ')){
+    if(name==='Keypad Enter')return'Return';
+    return name.slice(7)==='Return'?'Return':name;
+  }
+  if(name==='Return')return'Keypad Enter';
+  if(name==='enter')return'Return';
+  if(name==='Backspace')return'Delete';
+  if(name==='Delete')return'Backspace';
+  return'Keypad '+name;
+}
+function displayColor(){const v=$('setColor').value;return[parseInt(v.slice(1,3),16),parseInt(v.slice(3,5),16),parseInt(v.slice(5,7),16)]}
+let screenShadow=true;
+function start(){core('casioemu_core_start');emuRunning=true;setRunUi()}
+function pause(){core('casioemu_core_stop');emuRunning=false;setRunUi();saveRamAuto()}
+function doReset(){core('casioemu_core_reset');updateFrameOnce();if(!emuRunning)start();toast(T('reset'))}
+function setRunUi(){
+  $('btnRun').disabled=!currentModel||!coreReady;
+  $('btnPause').disabled=!currentModel||!coreReady||!emuRunning;
+  $('btnReset').disabled=!currentModel||!coreReady;
+  $('btnSnapSave').disabled=!currentModel||!coreReady;
+  $('btnSnapLoad').disabled=!currentModel||!coreReady;
+  $('btnRamSave').disabled=!currentModel||!coreReady;
+  $('btnRamLoad').disabled=!currentModel||!coreReady;
+  $('btnKbd').disabled=!currentModel||!coreReady;
+  $('btnGui').disabled=!currentModel||!coreReady;
+  setStatus('stState',emuRunning?T('st_run'):T('st_pause'),emuRunning?'ok':'warn');
+}
+function setStatus(id,text,cls){const el=$(id);el.textContent=text;el.className=cls||''}
+function setModelInfo(){
+  setStatus('stModel',currentModel?currentModel.name:'');
+  let ver='';
+  try{ver=core('casioemu_core_rom_version',[],[] ,'string')||''}catch(e){}
+  setStatus('stRom',ver);
+}
+
+/* ================= LCD 渲染 ================= */
+let lcdCtx=null,lcdTmp=null,lcdImgData=null,ifaceImg=null,ifaceLoaded=false,standaloneLcdCtx=null;
+function updateFrameOnce(){
+  try{core('casioemu_core_update_frame')}catch(e){return}
+  const w=core('casioemu_core_frame_width'),h=core('casioemu_core_frame_height');
+  if(w<=0||h<=0)return;
+  if(w!==lcdW||h!==lcdH){lcdW=w;lcdH=h;sizeLcdCanvas()}
+  const ptr=core('casioemu_core_frame_ptr');
+  if(!ptr)return;
+  if(!lcdImgData||lcdImgData.width!==w)lcdImgData=lcdCtx.createImageData(w,h);
+  lcdImgData.data.set(Module.HEAPU8.subarray(ptr,ptr+w*h*4));
+  // 合成到显示画布（透明区域透出 LCD 底色）
+  const tmp=lcdTmp;tmp.width=w;tmp.height=h;
+  tmp.getContext('2d').putImageData(lcdImgData,0,0);
+  const cw=lcdCtx.canvas.width,ch=lcdCtx.canvas.height;
+  lcdCtx.clearRect(0,0,cw,ch);
+  lcdCtx.drawImage(tmp,0,0,w,h,0,0,cw,ch);
+  drawEpsStatus();
+  // 独立 LCD 面板模式：同步一份到备用画布
+  if(standaloneLcdCtx){
+    const sc=standaloneLcdCtx.canvas;
+    if(sc.width!==cw||sc.height!==ch){sc.width=cw;sc.height=ch}
+    standaloneLcdCtx.clearRect(0,0,cw,ch);
+    standaloneLcdCtx.drawImage(tmp,0,0,w,h,0,0,cw,ch);
+  }
+}
+function computeLcdScale(){
+  // 返回：每个 LCD 逻辑像素对应的 canvas 缓冲区像素数
+  // 目标 = 屏幕上实际显示的 CSS 宽度 × dpr
+  const dispW=Math.max(60,lcdCssW||lcdW||128);
+  const lcdLogicW=lcdW||128;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const needed=Math.ceil((dispW*dpr)/lcdLogicW);
+  return Math.max(1,Math.min(needed,8));
+}
+function sizeLcdCanvas(){
+  const c=$('lcdCanvas');
+  if(!lcdW||!lcdH){return}
+  const bufScale=computeLcdScale();          // 缓冲区像素 / LCD 像素
+  c.width=Math.max(1,Math.round(lcdW*bufScale));
+  c.height=Math.max(1,Math.round(lcdH*bufScale));
+  lcdCtx=c.getContext('2d');
+  lcdCtx.imageSmoothingEnabled=false;
+  lcdTmp=document.createElement('canvas');
+  positionLcdOverlay();
+  // 无界面图（无法叠加）时，退化为独立 LCD 面板显示
+  const canOverlay=ifaceImg&&currentModel&&currentModel.cfg.sprites.rsd_pixel;
+  const wrap=$('lcdWrap');
+  if(wrap){
+    if(canOverlay){wrap.style.display='none'}
+    else{
+      wrap.style.display='flex';
+      const sc=$('lcdCanvasStandalone');
+      if(sc){
+        sc.width=c.width;sc.height=c.height;
+        sc.style.width='100%';sc.style.maxWidth='none';sc.style.height='auto';
+        sc.style.imageRendering='pixelated';
+        standaloneLcdCtx=sc.getContext('2d');standaloneLcdCtx.imageSmoothingEnabled=false;
+      }
+    }
+  }
+}
+/* ===== 状态栏（屏幕上方一排指示图标）=====
+   - EPS 机型：走核心 status_alpha（按 config.status_indicators）
+   - v51 等旧机型：config 不含状态位定义，但 sprites 里有 rsd_* 图标，
+     我们直接从 LCD 帧顶部状态行探测像素，对应图标点亮。
+   统一绘制到 kbdCanvas（界面图）上对应 dest 位置。 */
+const STATUS_SPRITE_ORDER=[
+  'rsd_s','rsd_a','rsd_m','rsd_sto','rsd_math','rsd_d','rsd_r','rsd_g','rsd_fix','rsd_sci',
+  'rsd_e','rsd_cmplx','rsd_angle','rsd_wdown','rsd_left','rsd_down','rsd_up','rsd_right','rsd_pause','rsd_sun'
+];
+function statusIndicators(){
+  const cfg=currentModel&&currentModel.cfg;
+  if(!cfg)return [];
+  if(cfg.status_indicators&&cfg.status_indicators.length)return cfg.status_indicators;
+  // v51：按 sprites 自动生成（顺序 = 界面图上从左到右的 x 位置）
+  const list=[];
+  for(const name of STATUS_SPRITE_ORDER){
+    const sp=cfg.sprites&&cfg.sprites[name];
+    if(!sp)continue;
+    list.push({sprite_name:name,auto:true});
+  }
+  return list;
+}
+function drawEpsStatus(){
+  const model=currentModel;
+  if(!model||!ifaceImg)return;
+  const kbd=$('kbdCanvas');
+  if(!kbd||!kbd.width)return;
+  const list=statusIndicators();
+  if(!list.length)return;
+  // 界面图 → kbdCanvas 的缩放比
+  const k=ifaceImg.width?kbd.width/ifaceImg.width:1;
+  const ctx=kbd.getContext('2d');
+  // 先算清状态栏区域
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const it of list){
+    const sp=model.cfg.sprites[it.sprite_name];
+    if(!sp)continue;
+    minX=Math.min(minX,sp.dest.x);minY=Math.min(minY,sp.dest.y);
+    maxX=Math.max(maxX,sp.dest.x+sp.dest.w);maxY=Math.max(maxY,sp.dest.y+sp.dest.h);
+  }
+  if(minX===Infinity)return;
+  // ——— 计算应点亮集合 ———
+  let onNames=[];
+  let alphaArr=null;
+  if(model.eps){
+    const n=core('casioemu_core_status_alpha_len');
+    const ptr=n?core('casioemu_core_status_alpha_ptr'):0;
+    if(n&&ptr)alphaArr=Module.HEAPU8.subarray(ptr,ptr+n);
+  }
+  if(alphaArr){
+    for(let i=0;i<list.length&&i<alphaArr.length;i++){
+      if(alphaArr[i]>3)onNames.push(list[i].sprite_name);
+    }
+  }else{
+    onNames=detectStatusFromFrame(list);
+  }
+  // ——— 仅在状态变化时重绘（大幅降低开销）———
+  const sig=onNames.join(',')+'|'+k.toFixed(3);
+  if(sig===lastStatusSig)return;
+  lastStatusSig=sig;
+  // 清掉旧状态栏区域（用界面图原像素重画）
+  ctx.clearRect(minX*k,minY*k,(maxX-minX)*k,(maxY-minY)*k);
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(ifaceImg, minX,minY,(maxX-minX),(maxY-minY),
+                minX*k,minY*k,(maxX-minX)*k,(maxY-minY)*k);
+  // 逐图标绘制
+  ctx.imageSmoothingEnabled=true;
+  for(const name of onNames){
+    const sp=model.cfg.sprites[name];
+    if(!sp)continue;
+    // EPS 机型按 alpha 半透明显示；旧机型直接实心
+    const idx=list.findIndex(x=>x.sprite_name===name);
+    const a=alphaArr&&idx>=0?(alphaArr[idx]/255):1;
+    if(a<=0.01)continue;
+    ctx.globalAlpha=a;
+    ctx.drawImage(ifaceImg,sp.src.x,sp.src.y,sp.src.w,sp.src.h,
+      sp.dest.x*k,sp.dest.y*k,sp.dest.w*k,sp.dest.h*k);
+  }
+  ctx.globalAlpha=1;
+}
+let lastStatusSig='';
+/* 从 LCD 帧中探测哪些状态图标处于激活状态。
+   策略：状态栏图标在界面图上横向排布（dest.x），把同样的相对位置映射到
+   LCD 帧的横向范围，扫描帧的前几行；某图标位置有墨迹即点亮。
+   若帧内完全没有状态信息（全空），退化为常用常显图标，保证界面完整。 */
+let statusFallbackUsed=false;
+function detectStatusFromFrame(list){
+  const out=[];
+  if(!lcdImgData||!lcdW||!lcdH)return out;
+  const d=lcdImgData.data;
+  const cfg=currentModel&&currentModel.cfg;
+  // 状态栏在界面图上的横向范围
+  let minX=Infinity,maxX=-Infinity;
+  for(const it of list){
+    const sp=cfg.sprites[it.sprite_name];
+    if(!sp)continue;
+    minX=Math.min(minX,sp.dest.x);maxX=Math.max(maxX,sp.dest.x+sp.dest.w);
+  }
+  if(minX===Infinity)return out;
+  const spanX=maxX-minX;
+  // 扫描帧的前 3 行（状态行一般在最上）
+  const scanRows=Math.min(3,lcdH);
+  for(const it of list){
+    const sp=cfg.sprites[it.sprite_name];
+    if(!sp)continue;
+    const rel=(sp.dest.x-minX)/spanX;                 // 0..1 相对位置
+    const cx=Math.round(rel*(lcdW-1));
+    const w=Math.max(2,Math.round((sp.dest.w/spanX)*lcdW));
+    let ink=0;
+    for(let y=0;y<scanRows;y++){
+      for(let x=Math.max(0,cx-1);x<Math.min(lcdW,cx+w);x++){
+        const o=(y*lcdW+x)*4;
+        if(d[o+3]>20&&(d[o]+d[o+1]+d[o+2])<600)ink++;
+      }
+    }
+    if(ink>0)out.push(it.sprite_name);
+  }
+  // 帧里没有任何状态信息 → 使用常显的默认图标组合（D + MATH + 右下角电池）
+  if(out.length===0){
+    statusFallbackUsed=true;
+    const defaults=['rsd_d','rsd_math','rsd_sun'];
+    for(const n of defaults)if(cfg.sprites[n])out.push(n);
+  }
+  return out;
+}
+/* LCD 叠加到计算器界面图的屏幕区域：
+   依据 config.bin 里的 rsd_pixel（1 个 LCD 像素在界面图中的位置/大小），
+   把 LCD canvas 绝对定位到 kbdCanvas（已按界面图缩放）对应的屏幕矩形上。 */
+let lcdCssW=0,lcdCssH=0;   // LCD 在页面上的实际显示尺寸（CSS px）
+function positionLcdOverlay(){
+  const model=currentModel;
+  const lcd=$('lcdCanvas');
+  const kbd=$('kbdCanvas');
+  if(!lcd||!kbd)return;
+  if(!ifaceImg||!model||!model.cfg||!model.cfg.sprites||!model.cfg.sprites.rsd_pixel){
+    lcd.classList.remove('active');
+    return;
+  }
+  if(!lcdW||!lcdH){lcd.classList.remove('active');return}
+  const px=model.cfg.sprites.rsd_pixel;
+  const src=px.src||px.dest;
+  if(!src)return;
+  // 界面图在 CSS 中的缩放比（kbdCanvas 显示宽度 / 图片原始宽度）
+  const dispW=kbd.getBoundingClientRect().width||kbd.width;
+  const imgW=ifaceImg.width||1;
+  const k=dispW/imgW;
+  // 每个 LCD 像素占界面图的像素数（通常 1×1，个别机型 2×2）
+  const pxPerLcdW=src.w||1, pxPerLcdH=src.h||1;
+  // 屏幕矩形（界面图坐标）→ CSS 坐标
+  const left=src.x*k;
+  const top=src.y*k;
+  const width=(lcdW*pxPerLcdW)*k;
+  const height=(lcdH*pxPerLcdH)*k;
+  lcdCssW=width;lcdCssH=height;
+  lcd.style.left=left+'px';
+  lcd.style.top=top+'px';
+  lcd.style.width=width+'px';
+  lcd.style.height=height+'px';
+  lcd.classList.add('active');
+  // 屏幕尺寸变化后，重新计算缓冲区精度
+  if(lcdCtx&&(lcd.width!==Math.round(lcdW*computeLcdScale())||lcd.height!==Math.round(lcdH*computeLcdScale()))){
+    const s=computeLcdScale();
+    lcd.width=Math.max(1,Math.round(lcdW*s));
+    lcd.height=Math.max(1,Math.round(lcdH*s));
+    lcdCtx=lcd.getContext('2d');
+    lcdCtx.imageSmoothingEnabled=false;
+  }
+}
+
+/* ================= 键盘界面 ================= */
+function loadInterface(model){
+  ifaceImg=null;ifaceLoaded=false;
+  const c=$('kbdCanvas');const ctx=c.getContext('2d');
+  const hint=$('kbdHint');
+  if(!model||!model.iface){hint.style.display='block';ctx.clearRect(0,0,c.width,c.height);drawButtons(ctx,null);return}
+  hint.style.display='none';
+  const url=URL.createObjectURL(model.iface.blob);
+  const img=new Image();
+  img.onload=()=>{ifaceImg=img;ifaceLoaded=true;
+    // 按容器实际可用宽度自适应（不再硬编码 430px），并允许放大以充分利用手机屏幕
+    const wrap=$('kbdWrap');
+    const avaiW=Math.max(200,(wrap.clientWidth||window.innerWidth)-16);
+    // 限制最大放大倍数，避免过度模糊：最多 2.2 倍原始宽度，且不超过容器
+    const scale=Math.min(avaiW/img.width,2.2);
+    c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+    // 显式给定 CSS 宽度（保持与缓冲区一致），由 #kbdStage 包裹并居中
+    c.style.width=c.width+'px';c.style.maxWidth='100%';c.style.height='auto';
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(img,0,0,c.width,c.height);
+    drawButtons(ctx,scale);
+    URL.revokeObjectURL(url);
+    // 界面图就绪后，把 LCD 精确定位到屏幕区域并重画一帧
+    positionLcdOverlay();
+    if(lcdW&&lcdH){sizeLcdCanvas();try{updateFrameOnce()}catch(e){}}
+    lastStatusSig='';
+    try{drawEpsStatus()}catch(e){}
+  };
+  img.onerror=()=>{toast('界面图加载失败','warn');URL.revokeObjectURL(url)};
+  img.src=url;
+}
+function drawButtons(ctx,scale){
+  if(!currentModel)return;
+  ctx.save();
+  ctx.lineWidth=1;ctx.strokeStyle='rgba(77,163,255,.55)';
+  for(const b of currentModel.cfg.buttons){
+    if(!b.rect.w||!b.rect.h)continue;
+    const x=b.rect.x*(scale||1),y=b.rect.y*(scale||1),w=b.rect.w*(scale||1),h=b.rect.h*(scale||1);
+    const pressed=pressedButtons.has(b.kiko);
+    if(pressed){ctx.fillStyle='rgba(77,163,255,.28)';ctx.fillRect(x,y,w,h)}
+    ctx.strokeRect(x,y,w,h);
+  }
+  ctx.restore();
+}
+function redrawKeyboard(){
+  const c=$('kbdCanvas');const ctx=c.getContext('2d');
+  if(ifaceImg){ctx.clearRect(0,0,c.width,c.height);ctx.drawImage(ifaceImg,0,0,c.width,c.height)}
+  const scale=c.width/(ifaceImg?ifaceImg.width:1);
+  drawButtons(ctx,ifaceImg?scale:1);
+  // 画布已被清空重绘，状态栏缓存失效，必须强制重画
+  lastStatusSig='';
+  try{drawEpsStatus()}catch(e){}
+}
+function hitTestButton(ev){
+  const c=$('kbdCanvas');
+  const rect=c.getBoundingClientRect();
+  const x=(ev.clientX-rect.left)*(c.width/rect.width);
+  const y=(ev.clientY-rect.top)*(c.height/rect.height);
+  if(!currentModel||!ifaceImg)return null;
+  const scale=c.width/ifaceImg.width;
+  const nx=x/scale,ny=y/scale;
+  for(const b of currentModel.cfg.buttons){
+    if(nx>=b.rect.x&&nx<b.rect.x+b.rect.w&&ny>=b.rect.y&&ny<b.rect.y+b.rect.h)return b;
+  }
+  return null;
+}
+function pressKiko(kiko,down){
+  if(!currentModel)return;
+  core('casioemu_core_button_event',['number','number'],[kiko,down?1:0],'number');
+  if(down)pressedButtons.add(kiko);else pressedButtons.delete(kiko);
+  redrawKeyboard();
+}
+(function kbdPointer(){
+  const c=$('kbdCanvas');
+  let active=null;
+  c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);guiFocus=false;
+    const b=hitTestButton(e);if(b){active=b.kiko;pressKiko(b.kiko,true)}});
+  c.addEventListener('pointermove',e=>{if(active===null)return;
+    const b=hitTestButton(e);
+    if(!b||b.kiko!==active){pressKiko(active,false);active=b?b.kiko:null;if(b)pressKiko(b.kiko,true)}});
+  c.addEventListener('pointerup',e=>{if(active!==null){pressKiko(active,false);active=null}});
+  c.addEventListener('pointercancel',()=>{if(active!==null){pressKiko(active,false);active=null}});
+})();
+
+/* ================= GUI（调试器） ================= */
+let guiCtx=null,guiImg=null;
+let guiTarget='panel'; // 'panel' 内嵌 | 'modal' 全屏
+function guiCanvasEl(){return guiTarget==='modal'?$('guiCanvasFull'):$('guiCanvas')}
+function modalOpen(){const m=$('guiModal');return m&&m.classList.contains('open')}
+function attachGui(){
+  if(!currentModel||!coreReady){toast('请先导入并运行模型','warn');return false}
+  // 全屏模式下优先使用全屏画布（尺寸更大）
+  const useModal=modalOpen();
+  guiTarget=useModal?'modal':'panel';
+  let cv=guiCanvasEl();
+  let rect=cv.getBoundingClientRect();
+  // 若当前目标不可见（宽或高为0），回退到另一个
+  if((rect.width<32||rect.height<32)){
+    const other=useModal?$('guiCanvas'):$('guiCanvasFull');
+    if(other){const r2=other.getBoundingClientRect();if(r2.width>=32&&r2.height>=32){guiTarget=useModal?'panel':'modal';cv=other;rect=r2}}
+  }
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  guiW=Math.min(2048,Math.max(320,Math.round((rect.width||640)*dpr)));
+  guiH=Math.min(1536,Math.max(240,Math.round((rect.height||480)*dpr)));
+  cv.width=guiW;cv.height=guiH;
+  guiCtx=cv.getContext('2d');
+  const rc=core('casioemu_core_gui_attach',['number','number'],[guiW,guiH],'number');
+  guiAttached=true;
+  guiFailCount=0;
+  guiImg=null;
+  // 按当前画布大小自适应调试板刷新率（避免手机上过载）
+  if(typeof computeGuiInterval==='function')guiFpsInterval=computeGuiInterval();
+  cv.style.display='block';
+  const idle=$('guiIdle');if(idle)idle.style.display='none';
+  // 若核心明确失败，提示
+  if(rc===0&&typeof rc==='number'){/* 部分核心返回值不代表失败 */}
+  toast('调试板已启用（'+(guiTarget==='modal'?'全屏':'内嵌')+'）','ok');
+  return true;
+}
+function detachGui(){
+  try{core('casioemu_core_gui_detach')}catch(e){}
+  guiAttached=false;guiFailCount=0;
+  for(const id of ['guiCanvas','guiCanvasFull']){
+    const c=$(id);if(c&&c.getContext){const g=c.getContext('2d');g.clearRect(0,0,c.width,c.height)}
+  }
+  const idle=$('guiIdle');if(idle)idle.style.display='';
+}
+let guiResizeT=null;
+function scheduleGuiResize(){
+  if(!currentModel||!coreReady||!guiAttached)return;
+  clearTimeout(guiResizeT);
+  guiResizeT=setTimeout(()=>{
+    const cv=guiCanvasEl();
+    const rect=cv.getBoundingClientRect();
+    if(rect.width<32||rect.height<32)return;
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    const nw=Math.min(2048,Math.max(320,Math.round(rect.width*dpr)));
+    const nh=Math.min(1536,Math.max(240,Math.round(rect.height*dpr)));
+    if(nw!==guiW||nh!==guiH){guiW=nw;guiH=nh;cv.width=nw;cv.height=nh;guiImg=null;
+      try{core('casioemu_core_gui_attach',['number','number'],[nw,nh],'number')}catch(e){}
+      if(typeof computeGuiInterval==='function')guiFpsInterval=computeGuiInterval();}
+  },180);
+}
+window.addEventListener('resize',scheduleGuiResize);
+window.addEventListener('orientationchange',()=>setTimeout(scheduleGuiResize,260));
+// 屏幕尺寸变化时，重排 LCD 与键盘以适应可用宽度
+let layoutT=null;
+function relayout(){
+  clearTimeout(layoutT);
+  layoutT=setTimeout(()=>{
+    if(lcdW&&lcdH){sizeLcdCanvas();updateFrameOnce()}
+    if(currentModel)loadInterface(currentModel);
+  },200);
+}
+window.addEventListener('resize',relayout);
+window.addEventListener('orientationchange',()=>setTimeout(relayout,280));
+// 两个画布的指针事件都转发到核心
+(function guiPointer(){
+  function bind(cv){
+    if(!cv)return;
+    const toXY=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)]};
+    cv.addEventListener('pointerdown',e=>{guiFocus=true;try{cv.setPointerCapture(e.pointerId)}catch(_){}
+      const[x,y]=toXY(e);core('casioemu_core_gui_pointer',['double','double','number','number'],[x,y,e.button,1],'number')});
+    cv.addEventListener('pointermove',e=>{if(e.buttons===0&&e.pointerType!=='mouse')return;const[x,y]=toXY(e);core('casioemu_core_gui_pointer',['double','double','number','number'],[x,y,-1,0],'number')});
+    cv.addEventListener('pointerup',e=>{const[x,y]=toXY(e);core('casioemu_core_gui_pointer',['double','double','number','number'],[x,y,e.button,0],'number')});
+    cv.addEventListener('wheel',e=>{e.preventDefault();
+      core('casioemu_core_gui_wheel',['double','double'],[e.deltaX/100,e.deltaY/100],'number')},{passive:false});
+    cv.addEventListener('contextmenu',e=>e.preventDefault());
+  }
+  bind($('guiCanvas'));bind($('guiCanvasFull'));
+})();
+let guiFailCount=0; // GUI 连续失败计数（跨型号切换后旧调试窗口可能失效）
+function renderGui(){
+  if(!guiAttached)return;
+  let ok=false;
+  try{
+    const rc=core('casioemu_core_gui_frame');
+    if(rc!==0){guiFailCount++;ok=false}
+    else{
+      const ptr=core('casioemu_core_gui_frame_ptr');
+      const len=core('casioemu_core_gui_frame_len');
+      if(!ptr||!len){guiFailCount++;ok=false}
+      else{
+        if(!guiImg||guiImg.width!==guiW)guiImg=guiCtx.createImageData(guiW,guiH);
+        guiImg.data.set(Module.HEAPU8.subarray(ptr,ptr+len));
+        guiCtx.putImageData(guiImg,0,0);
+        ok=true;
+      }
+    }
+  }catch(e){guiFailCount++}
+  if(ok)guiFailCount=0;
+  else if(guiFailCount>=3){ // 连续失败：自动摘除 GUI，模拟器主体不受影响
+    detachGui();
+    toast('调试板已自动关闭（核心渲染失败）','warn');
+  }
+}
+
+/* ================= 键盘事件路由 ================= */
+function guiNeedsKeyboard(){
+  if(!coreReady||!guiAttached)return false;
+  try{return core('casioemu_core_gui_want_text_input')===1}catch(e){return false}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='F12')return;
+  if(e.target.closest('input,select,textarea'))return; // 输入框内不路由
+  const toGui=guiFocus||guiNeedsKeyboard();
+  const sdl=domKeyToSDL(e);
+  if(toGui&&guiAttached){
+    const mods=[e.ctrlKey?1:0,e.shiftKey?1:0,e.altKey?1:0,e.metaKey?1:0];
+    if(sdl>=0)core('casioemu_core_gui_key',['number','number','number','number','number','number'],[sdl,1,...mods],'number');
+    if(!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.isComposing&&sdl>0&&sdl<128&&sdl!==13&&sdl!==8&&sdl!==9&&sdl!==27)
+      core('casioemu_core_gui_text',['number'],[sdl],'number');
+    if(sdl===13){core('casioemu_core_gui_key',['number','number','number','number','number','number'],[13,0,...mods],'number')}
+    e.preventDefault();return;
+  }
+  if(sdl>=0&&currentModel)core('casioemu_core_sdl_key_event',['number','number'],[sdl,1],'number');
+  if(e.key===' '||e.key.startsWith('Arrow'))e.preventDefault();
+});
+document.addEventListener('keyup',e=>{
+  if(e.target.closest('input,select,textarea'))return;
+  const toGui=guiFocus||guiNeedsKeyboard();
+  const sdl=domKeyToSDL(e);
+  if(toGui&&guiAttached){
+    if(sdl>=0)core('casioemu_core_gui_key',['number','number','number','number','number','number'],[sdl,0,e.ctrlKey?1:0,e.shiftKey?1:0,e.altKey?1:0,e.metaKey?1:0],'number');
+    return;
+  }
+  if(sdl>=0&&currentModel)core('casioemu_core_sdl_key_event',['number','number'],[sdl,0],'number');
+});
+
+/* ================= IME（GUI 中文输入） ================= */
+const ime=$('imeInput');
+let imeActive=false,imeComposing=false;
+function pollIme(){
+  if(!coreReady||!guiAttached)return;
+  let vis=0,x=0,y=0,lh=20;
+  try{vis=core('casioemu_core_gui_ime_visible');x=core('casioemu_core_gui_ime_x',[],[] ,'double');y=core('casioemu_core_gui_ime_y',[],[] ,'double');lh=core('casioemu_core_gui_ime_line_height',[],[] ,'double')}catch(e){return}
+  if(vis&&!imeActive){
+    const cv=$('guiCanvas');const r=cv.getBoundingClientRect();
+    ime.style.left=(r.left+x*cv.width/guiW)+'px';
+    ime.style.top=(r.top+y*cv.height/guiH)+'px';
+    ime.style.pointerEvents='auto';ime.focus();imeActive=true;
+  }else if(!vis&&imeActive){ime.style.pointerEvents='none';ime.blur();imeActive=false}
+}
+function imeFlush(){
+  const v=ime.value;
+  if(!v)return;
+  for(const ch of v){
+    const cp=ch.codePointAt(0);
+    if(cp>0)core('casioemu_core_gui_text',['number'],[cp],'number');
+  }
+  ime.value='';
+}
+ime.addEventListener('compositionstart',()=>{imeComposing=true});
+ime.addEventListener('compositionend',()=>{imeComposing=false;imeFlush()});
+ime.addEventListener('input',()=>{
+  if(!imeComposing)imeFlush(); // 非组合输入直接送；组合期间等 compositionend
+});
+ime.addEventListener('keydown',e=>{
+  e.stopPropagation(); // 不落到 document 路由
+  if(imeComposing)return;
+  if(e.key==='Enter'){core('casioemu_core_gui_key',['number','number','number','number','number','number'],[13,1,0,0,0,0],'number');
+    core('casioemu_core_gui_key',['number','number','number','number','number','number'],[13,0,0,0,0,0],'number');e.preventDefault()}
+  if(e.key==='Escape'){core('casioemu_core_gui_key',['number','number','number','number','number','number'],[27,1,0,0,0,0],'number');
+    core('casioemu_core_gui_key',['number','number','number','number','number','number'],[27,0,0,0,0,0],'number');e.preventDefault()}
+});
+
+/* ================= 剪贴板 ================= */
+async function pollClipboard(){
+  if(!coreReady||!guiAttached)return;
+  try{
+    if(core('casioemu_core_gui_clipboard_write_pending')===1){
+      const rev=core('casioemu_core_gui_clipboard_write_revision');
+      const text=core('casioemu_core_gui_clipboard_write_text',[],[] ,'string')||'';
+      try{await navigator.clipboard.writeText(text)}catch(e){
+        const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();
+        try{document.execCommand('copy')}catch(_){}ta.remove();
+      }
+      core('casioemu_core_gui_clipboard_write_ack',['number'],[rev]);
+    }
+  }catch(e){}
+}
+async function setClipboard(text){
+  try{await navigator.clipboard.writeText(text)}catch(e){
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy')}catch(_){}ta.remove();
+  }
+  if(coreReady)core('casioemu_core_gui_set_clipboard_text',['string'],[text],'number');
+}
+
+/* ================= 文件请求（调试器导出/导入） ================= */
+async function handleFileRequests(){
+  if(!coreReady)return;
+  try{
+    if(core('casioemu_core_gui_file_request_pending')!==1)return;
+    const kind=core('casioemu_core_gui_file_request_kind',[],[] ,'string')||'';
+    const path=core('casioemu_core_gui_file_request_path',[],[] ,'string')||'';
+    const name=core('casioemu_core_gui_file_request_name',[],[] ,'string')||'snapshot.bin';
+    if(kind==='download'){
+      try{
+        const data=Module.FS.readFile(path);
+        downloadBlob(name.replace(/[\\/]/g,'_'),new Blob([data]));
+        core('casioemu_core_gui_file_request_complete',['string','number'],[path,0]);
+      }catch(e){core('casioemu_core_gui_file_request_complete',['string','number'],[path,1])}
+      core('casioemu_core_gui_file_request_ack');
+    }else if(kind==='open_file'){
+      const input=document.createElement('input');input.type='file';
+      input.onchange=async()=>{
+        const f=input.files&&input.files[0];
+        if(f){
+          const buf=new Uint8Array(await f.arrayBuffer());
+          try{Module.FS.writeFile(path,buf);core('casioemu_core_gui_file_request_complete',['string','number'],[path,0])}
+          catch(e){core('casioemu_core_gui_file_request_complete',['string','number'],[path,1])}
+        }else{
+          core('casioemu_core_gui_file_request_complete',['string','number'],[path,1]);
+        }
+        core('casioemu_core_gui_file_request_ack');
+      };
+      input.click();
+    }else if(kind==='sync'){
+      try{Module.FS.syncfs(false,()=>{})}catch(e){}
+      core('casioemu_core_gui_file_request_ack');
+    }
+  }catch(e){}
+}
+
+/* ================= 快照 ================= */
+function doSaveSnapshot(){
+  try{
+    const rc=core('casioemu_core_save_snapshot');
+    if(rc!==0){toast('快照保存失败 rc='+rc,'err');return}
+    const len=core('casioemu_core_snapshot_len');
+    if(!len){toast('快照为空','warn');return}
+    const ptr=core('casioemu_core_snapshot_ptr');
+    const bytes=readPtr(ptr,len);
+    const name=$('slotName').value||('snap'+snapshotSeq++);
+    // 预览：当前 LCD 画面
+    let preview='';
+    try{preview=$('lcdCanvas').toDataURL('image/png')}catch(e){}
+    snapshots.unshift({name,bytes,preview,model:currentModel?currentModel.id:''});
+    if(snapshots.length>8)snapshots.length=8;
+    renderSlotList();
+    toast(T('snap_saved'),'ok');
+  }catch(e){toast('快照保存异常: '+e,'err')}
+}
+function doLoadSnapshot(snap){
+  if(!snap)return;
+  try{
+    const p=passBytes(snap.bytes);
+    const rc=core('casioemu_core_load_snapshot',['number','number'],[p,snap.bytes.length],'number');
+    Module._free(p);
+    if(rc!==0){toast('快照载入失败 rc='+rc,'err');return}
+    updateFrameOnce();
+    if(!emuRunning)start();
+    toast(T('snap_loaded'),'ok');
+  }catch(e){toast('快照载入异常: '+e,'err')}
+}
+function renderSlotList(){
+  const list=$('slotList');list.innerHTML='';
+  if(!snapshots.length){list.innerHTML='<div style="color:var(--dim)">'+T('snap_empty')+'</div>';return}
+  snapshots.forEach((s,i)=>{
+    const row=document.createElement('div');row.className='slot-row';
+    row.innerHTML='<img src="'+(s.preview||'')+'"><div class="nm">'+esc(s.name)+'</div>';
+    const b1=document.createElement('button');b1.textContent=T('snap_load');
+    b1.onclick=()=>doLoadSnapshot(s);
+    const b2=document.createElement('button');b2.textContent='导出';
+    b2.onclick=()=>downloadBlob(s.name+'.snapshot',new Blob([s.bytes]));
+    const b3=document.createElement('button');b3.textContent='✕';b3.style.color='var(--err)';
+    b3.onclick=()=>{snapshots.splice(i,1);renderSlotList()};
+    row.appendChild(b1);row.appendChild(b2);row.appendChild(b3);
+    list.appendChild(row);
+  });
+}
+
+/* ================= RAM 持久化 ================= */
+function saveRamAuto(){
+  if(!currentModel||!coreReady)return;
+  try{
+    const size=core('casioemu_core_persistent_ram_size');
+    if(size<=0||size>4*1024*1024)return;
+    const p=Module._malloc(size);
+    const rc=core('casioemu_core_save_persistent_ram',['number','number'],[p,size],'number');
+    if(rc===0){const bytes=readPtr(p,size);idbPut('ram',{id:currentModel.id,bytes:bytes})}
+    Module._free(p);
+  }catch(e){}
+}
+function doRamSave(){
+  const size=core('casioemu_core_persistent_ram_size');
+  if(!size){toast('当前型号无用户 RAM','warn');return}
+  const p=Module._malloc(size);
+  const rc=core('casioemu_core_save_persistent_ram',['number','number'],[p,size],'number');
+  if(rc===0){const bytes=readPtr(p,size);downloadBlob(currentModel.id+'.ram',new Blob([bytes]));toast(T('ram_saved'),'ok')}
+  else toast('RAM 保存失败 rc='+rc,'err');
+  Module._free(p);
+}
+async function restoreRam(model){
+  try{
+    const rec=await idbGet('ram',model.id);
+    if(!rec||!rec.bytes)return;
+    const size=core('casioemu_core_persistent_ram_size');
+    if(rec.bytes.length!==size)return;
+    const p=passBytes(rec.bytes);
+    core('casioemu_core_load_persistent_ram',['number','number'],[p,rec.bytes.length],'number');
+    Module._free(p);
+  }catch(e){}
+}
+function doRamLoad(){
+  const input=document.createElement('input');input.type='file';input.accept='.ram,.bin';
+  input.onchange=async()=>{
+    const f=input.files&&input.files[0];if(!f)return;
+    const bytes=new Uint8Array(await f.arrayBuffer());
+    const p=passBytes(bytes);
+    const rc=core('casioemu_core_load_persistent_ram',['number','number'],[p,bytes.length],'number');
+    Module._free(p);
+    if(rc===0){toast(T('ram_loaded'),'ok')}else toast('RAM 载入失败 rc='+rc,'err');
+  };
+  input.click();
+}
+
+/* ================= QR ================= */
+function pollQr(){
+  if(!coreReady||!currentModel)return;
+  try{
+    if(core('casioemu_core_qr_update')===1){
+      const data=core('casioemu_core_qr_data',[],[] ,'string')||'';
+      if(data&&data!==lastQr){
+        lastQr=data;
+        $('qrUrl').textContent=data;
+        $('qrOpen').href=data;
+        $('qrModal').classList.add('open');
+      }
+    }
+  }catch(e){}
+}
+
+/* ================= 模型库（IndexedDB 持久化） ================= */
+async function persistModel(model){
+  try{
+    const rec={id:model.id,name:model.name,cfg:model.cfg,rom:model.rom,flash:model.flash||null,iface:model.iface?{mime:model.iface.mime,blob:model.iface.blob}:null};
+    await idbPut('models',rec);
+  }catch(e){console.warn(e)}
+}
+async function loadPersistedModels(){
+  try{
+    const recs=await idbAll('models');
+    for(const rec of recs){
+      const m={id:rec.id,name:rec.name,cfg:rec.cfg,rom:rec.rom,flash:rec.flash||null,eps:EPS_HWS.has(rec.cfg.hardware_id)};
+      if(rec.iface)m.iface={mime:rec.iface.mime,blob:rec.iface.blob};
+      if(!models.find(x=>x.id===m.id))models.push(m);
+    }
+    refreshModelList();
+  }catch(e){}
+}
+function refreshModelList(){
+  const sel=$('modelSelect');
+  sel.innerHTML='';
+  for(const m of models){
+    const o=document.createElement('option');o.value=m.id;o.textContent=m.name;sel.appendChild(o);
+  }
+  if(currentModel)sel.value=currentModel.id;
+  sel.disabled=models.length===0;
+  renderLibList();
+}
+function selectModel(id){
+  const m=models.find(x=>x.id===id);
+  if(!m)return;
+  try{pause();saveRamAuto()}catch(e){}
+  startModel(m);
+}
+
+/* ================= 导入流程 ================= */
+function toArray(list){
+  if(list==null)return[];
+  if(Array.isArray(list))return list;
+  if(typeof list.length==='number')return Array.from(list);
+  if(typeof list[Symbol.iterator]==='function')return [...list];
+  return [list];
+}
+function collectFiles(fileList){
+  const map={};
+  const arr=toArray(fileList);
+  for(const f of arr){
+    if(!f)continue;
+    // 统一用正斜杠，兼容 File/Blob/自定义对象（自定义对象可能只有 name/lastModified 等）
+    const rel=(f.webkitRelativePath)||'';
+    const nm=f.name||(typeof f==='string'?f:'');
+    const path=rel?rel.replace(/\\/g,'/'):nm;
+    const base=(path.split('/').pop()||nm||'').replace(/\\/g,'/');
+    // 小写文件名索引，便于大小写不敏感查找
+    const keyBase=base.toLowerCase();
+    map[base]=f;
+    map[keyBase]=f;
+    if(path&&path!==base){
+      if(!map[path])map[path]=f;
+      const kPath=path.toLowerCase();
+      if(!map[kPath])map[kPath]=f;
+    }
+  }
+  return map;
+}
+function pickFile(files,names){
+  // 大小写不敏感、兼容正斜杠路径的查找
+  for(const n of names){
+    if(files[n]!=null)return files[n];
+    const ln=String(n).toLowerCase();
+    if(files[ln]!=null)return files[ln];
+    const base=ln.split('/').pop();
+    if(files[base]!=null)return files[base];
+  }
+  // 最后兜底：遍历匹配文件名
+  const want=new Set(names.map(n=>String(n).toLowerCase().split('/').pop()));
+  for(const k of Object.keys(files)){
+    const b=String(k).toLowerCase().split('/').pop();
+    if(want.has(b))return files[k];
+  }
+  return null;
+}
+async function toBytes(f){
+  if(f==null)return null;
+  if(f instanceof Uint8Array)return f;
+  if(f instanceof ArrayBuffer)return new Uint8Array(f);
+  if(typeof f.arrayBuffer==='function')return new Uint8Array(await f.arrayBuffer());
+  if(f.data!=null)return new Uint8Array(f.data);
+  return null;
+}
+async function importModelPackage(files,src){
+  try{
+    let cfg=null;
+    const cfgBin=pickFile(files,['config.bin']);
+    const cfgJson=pickFile(files,['config.json']);
+    if(cfgBin){
+      const bytes=await toBytes(cfgBin);
+      if(!bytes)throw new Error('config.bin 读取失败');
+      cfg=parseConfigBin(bytes);
+    }else if(cfgJson){
+      const bytes=await toBytes(cfgJson);
+      if(!bytes)throw new Error('config.json 读取失败');
+      const j=JSON.parse(new TextDecoder().decode(bytes));
+      cfg=parseConfigJson(j);
+    }else{
+      throw new Error(T('imp_badCfg')+'（需 config.bin 或 config.json）');
+    }
+    const model=await buildModel(cfg,files);
+    model.src=src||'idb';
+    const dup=models.find(m=>m.id===model.id);
+    if(dup){
+      // 覆盖更新
+      dup.cfg=model.cfg;dup.rom=model.rom;dup.flash=model.flash;dup.iface=model.iface;dup.eps=model.eps;dup.name=model.name;dup.src=model.src;
+      models.splice(models.indexOf(dup),1);models.unshift(dup);
+    }else{
+      models.unshift(model);
+    }
+    persistModel(model);
+    refreshModelList();renderLibList();
+    selectModel(model.id);
+    toast(T('imp_done')+'：'+model.name,'ok');
+  }catch(e){
+    console.error(e);
+    toast(T('imp_fail')+': '+e.message,'err');
+  }
+}
+async function importZip(file){
+  try{
+    const u8=await toBytes(file);
+    if(!u8)throw new Error('读取 ZIP 失败');
+    const zip=parseZip(u8);
+    const names=Object.keys(zip);
+    const files={};
+    for(const n of names){
+      if(n.endsWith('/'))continue; // 跳过目录条目
+      const entry=zip[n];
+      const base=n.split('/').pop();
+      let data=null;
+      if(entry&&entry.then){ // deflate 异步
+        data=await entry;
+      }else if(entry){
+        data=entry;
+      }
+      if(data==null)continue;
+      files[base]=new Blob([data]);
+      files[n]=new Blob([data]); // 保留完整路径，便于路径引用
+    }
+    if(!pickFile(files,['config.json','config.bin']))throw new Error('ZIP 中没有 config.json/config.bin');
+    await importModelPackage(files);
+  }catch(e){toast('ZIP 导入失败: '+e.message,'err')}
+}
+async function importBare(type,pd,real,romFile,flashFile){
+  try{
+    const rom=new Uint8Array(await romFile.arrayBuffer());
+    const cfg={hardware_id:parseInt(type,10),real_hardware:real==='1',pd_value:parseInt(pd,10)||0,
+      model_name:romFile.name.replace(/\.bin$/i,'')||('bare-'+type),rom_path:romFile.name,flash_path:flashFile?'':undefined,
+      buttons:[],sprites:{},status_indicators:[],extra:{},legacy_ko:false,is_sample_rom:false,enable_new_screen:false,
+      u16_mode:[4,5,7].includes(parseInt(type,10)),LARGE_model:true,ml620_mirroring:true,ink_color:{r:0,g:0,b:0},
+      screen_width:0,screen_height:0,screen_scale_y:1,csr_mask:parseInt(type,10)===3?1:parseInt(type,10)===8?0:15,
+      board_path:'',interface_path:'',status_sprite_indexes:{},button_svg_shapes:[],button_svg_defs:[],
+      sprite_svg_shapes:{},sprite_svg_defs:{},flash_path:''};
+    const files={[romFile.name]:rom};
+    if(flashFile)files[flashFile.name]=new Uint8Array(await flashFile.arrayBuffer());
+    const model=await buildModel(cfg,files);
+    models.unshift(model);
+    persistModel(model);
+    refreshModelList();renderLibList();
+    selectModel(model.id);
+  }catch(e){toast('裸 ROM 启动失败: '+e.message,'err')}
+}
+
+/* ================= 模型库 / 文件导入（例子模式：清单勾选 + 三种导入方式） ================= */
+const supportsDirPick='webkitdirectory' in document.createElement('input');
+const supportsFsAccess=typeof window.showDirectoryPicker==='function';
+let pendingFiles=[],selSet=new Set(),modelsDirHandle=null;
+function fmtSize(n){if(n>=1048576)return(n/1048576).toFixed(1)+'MB';if(n>=1024)return(n/1024).toFixed(1)+'KB';return n+'B'}
+function fileTag(name){
+  if(/^rom(\.bin)?$/i.test(name)||/\.rom$/i.test(name))return'req';
+  if(/^config\.(bin|json)$/i.test(name)||/^(interface|face)\./i.test(name)||/^spif\.bin$/i.test(name)||/^(board|keypad)\./i.test(name))return'rec';
+  return'opt';
+}
+function renderLibList(){
+  const list=$('libList');
+  if(!models.length)list.innerHTML='<div class="lib-empty">'+esc(T('lib_empty'))+'</div>';
+  else{
+    list.innerHTML='';
+    for(const m of models){
+      const c=document.createElement('div');
+      c.className='lib-card'+(currentModel&&currentModel.id===m.id?' active':'');
+      c.innerHTML='<div class="nm">'+esc(m.name)+'</div>'
+        +'<div class="hw">'+esc(HW_NAMES[m.cfg.hardware_id]||('HW '+m.cfg.hardware_id))+'</div>'
+        +'<div class="src">'+(m.src==='dir'?T('lib_src_dir'):T('lib_src_idb'))+'</div>'
+        +'<div class="acts"><button class="primary">'+T('lib_start')+'</button><button class="del">'+T('lib_del')+'</button></div>';
+      c.addEventListener('click',()=>{selectModel(m.id);$('libModal').classList.remove('open')});
+      c.querySelector('.acts .primary').onclick=e=>{e.stopPropagation();selectModel(m.id)};
+      c.querySelector('.acts .del').onclick=e=>{e.stopPropagation();removeModel(m.id)};
+      list.appendChild(c);
+    }
+  }
+}
+function removeModel(id){
+  const i=models.findIndex(m=>m.id===id);if(i<0)return;
+  models.splice(i,1);
+  idbDel('models',id).catch(()=>{});
+  if(currentModel&&currentModel.id===id){currentModel=null;emuRunning=false;try{core('casioemu_core_stop')}catch(e){}
+    try{core('casioemu_core_shutdown')}catch(e){};setRunUi()}
+  refreshModelList();renderLibList();
+  toast('已删除：'+id,'ok');
+}
+function renderImpArea(){
+  const area=$('impArea');
+  const mode=document.querySelector('input[name=impMode]:checked').value;
+  const dz='<div id="dropZone">'+esc(T('drop_zone'))+'</div>';
+  area.innerHTML='';
+  if(mode==='folder'){
+    area.innerHTML='<div id="pickBtns">'
+      +'<button id="btnPickFolder" class="primary full">'+esc(T('pick_folder'))+'</button>'
+      +'<button id="btnBareManual" class="full">'+esc(T('imp_bare_btn'))+'</button>'
+      +'</div><div id="fileWrap"></div>'+dz;
+    $('btnPickFolder').onclick=()=>{supportsDirPick?$('folderInput').click():toast(T('lib_no_support'),'warn')};
+    $('btnBareManual').onclick=()=>{$('bareModal').classList.add('open')};
+  }else if(mode==='zip'){
+    area.innerHTML='<div id="pickBtns"><button id="btnPickZip" class="primary full">'+esc(T('pick_zip'))+'</button></div>'+dz;
+    $('btnPickZip').onclick=()=>$('zipInput').click();
+  }else if(mode==='files'){
+    area.innerHTML='<div id="pickBtns"><button id="btnPickFiles" class="primary full">'+esc(T('pick_files'))+'</button></div>'+dz;
+    $('btnPickFiles').onclick=()=>$('filesInput').click();
+  }else{ // dir
+    area.innerHTML='<div id="pickBtns">'
+      +'<button id="btnPickDir" class="primary full">'+esc(T('pick_dir'))+'</button>'
+      +'<button id="btnRescanDir" class="full">'+esc(T('scanning_btn'))+'</button>'
+      +'</div>';
+    $('btnPickDir').onclick=()=>scanModelsDir(true);
+    $('btnRescanDir').onclick=()=>scanModelsDir(false);
+  }
+  renderFileList();
+}
+function renderFileList(){
+  const wrap=$('fileWrap');if(!wrap)return;
+  if(!pendingFiles.length){wrap.innerHTML='';return}
+  const rows=pendingFiles.map(f=>{
+    const n=f.name,tag=fileTag(n);
+    return '<label class="file-row"><input type="checkbox" data-f="'+esc(n)+'"'+(selSet.has(n)?' checked':'')+'>'
+      +'<span class="fn">'+esc(n)+'</span><span class="fs">'+fmtSize(f.size||0)+'</span>'
+      +'<span class="tag '+tag+'">'+T('tag_'+tag)+'</span></label>';
+  }).join('');
+  wrap.innerHTML='<div class="file-list">'+rows+'</div>'
+    +'<div class="sel-bar"><button id="btnSelAll">'+T('sel_all')+'</button>'
+    +'<button id="btnSelNone">'+T('sel_none')+'</button>'
+    +'<button id="btnImpSel" class="primary">'+T('imp_sel')+'</button></div>';
+  wrap.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.onchange=()=>{cb.checked?selSet.add(cb.dataset.f):selSet.delete(cb.dataset.f)};
+  });
+  $('btnSelAll').onclick=()=>{pendingFiles.forEach(f=>selSet.add(f.name));renderFileList()};
+  $('btnSelNone').onclick=()=>{selSet.clear();renderFileList()};
+  $('btnImpSel').onclick=()=>importSelectedFiles();
+}
+function setPendingFiles(fileList){
+  pendingFiles=[...fileList].map(f=>({name:f.name,size:f.size,file:f}));
+  selSet.clear();
+  const rom=pendingFiles.find(f=>/\.(bin|rom)$/i.test(f.name)&&/rom/i.test(f.name));
+  if(rom)selSet.add(rom.name);
+  renderImpArea();renderFileList();
+}
+async function importSelectedFiles(){
+  const sel=pendingFiles.filter(f=>selSet.has(f.name));
+  if(!sel.length){toast(T('no_sel'),'warn');return}
+  const hasRom=sel.some(f=>/\.(bin|rom)$/i.test(f.name)&&/rom/i.test(f.name));
+  if(!hasRom){
+    const romAll=pendingFiles.find(f=>/\.(bin|rom)$/i.test(f.name)&&/rom/i.test(f.name));
+    if(romAll)toast(T('sel_need_rom'),'warn');
+    else toast(T('no_sel'),'warn');
+    return;
+  }
+  await smartImport(sel.map(f=>f.file));
+}
+async function smartImport(fileList){
+  const arr=toArray(fileList);
+  const map=collectFiles(arr);
+  if(pickFile(map,['config.bin','config.json'])){await importModelPackage(map,'idb');return}
+  const zip=arr.find(f=>f&&/\.zip$/i.test(f.name||''));
+  if(zip){await importZip(zip);return}
+  const rom=Object.values(map).find(f=>{const n=String(f&&f.name||'').toLowerCase();return /\.(bin|rom)$/.test(n)&&/rom/.test(n)});
+  if(rom){await importBareAuto(rom);return}
+  toast('未识别到 config / ZIP / ROM 文件','err');
+}
+async function importBareAuto(romFile){
+  const rom=new Uint8Array(await romFile.arrayBuffer());
+  const cfg={hardware_id:4,real_hardware:false,pd_value:0,
+    model_name:romFile.name.replace(/\.(bin|rom)$/i,'')||'bare',rom_path:romFile.name,
+    buttons:[],sprites:{},status_indicators:[],extra:{},legacy_ko:false,is_sample_rom:false,enable_new_screen:false,
+    u16_mode:true,LARGE_model:true,ml620_mirroring:false,ink_color:{r:0,g:0,b:0},screen_width:0,screen_height:0,screen_scale_y:1,
+    csr_mask:15,board_path:'',interface_path:'',status_sprite_indexes:{},button_svg_shapes:[],button_svg_defs:[],
+    sprite_svg_shapes:{},sprite_svg_defs:{},flash_path:''};
+  const model=await buildModel(cfg,{[romFile.name]:rom});
+  models.unshift(model);persistModel(model);refreshModelList();selectModel(model.id);
+  toast(T('imp_bare_hint')+'：'+model.name,'ok');
+}
+/* ============ models 目录扫描（File System Access） ============ */
+async function scanModelsDir(forcePick){
+  const st=$('dirStatus');
+  if(!supportsFsAccess){st.textContent=T('lib_no_support');return}
+  try{
+    if(forcePick||!modelsDirHandle){
+      modelsDirHandle=await window.showDirectoryPicker({id:'casioemu-models'});
+      try{await idbPut('dir',{id:'models-dir',handle:modelsDirHandle})}catch(e){console.warn('dir handle persist',e)}
+    }
+    let perm=await modelsDirHandle.queryPermission({mode:'read'});
+    if(perm!=='granted')perm=await modelsDirHandle.requestPermission({mode:'read'});
+    if(perm!=='granted'){st.textContent=T('lib_dir_denied');return}
+    st.textContent=T('lib_scanning');
+    const ref={count:0};
+    const root=modelsDirHandle;
+    // 若所选目录本身不是 models（即没有直接的 config/rom），尝试深入定位其下的 models 子目录
+    const hasDirectModel=await hasModelFiles(root);
+    let startDir=root;
+    if(!hasDirectModel){
+      for await(const [name,handle] of root.entries()){
+        if(handle.kind==='directory'&&name.toLowerCase()==='models'){
+          startDir=handle;break;
+        }
+      }
+    }
+    await scanDirIntoModels(startDir,ref,0);
+    st.textContent=T('lib_dir_ok',{n:String(ref.count)});
+    refreshModelList();renderLibList();
+  }catch(e){st.textContent=T('lib_dir_fail',{msg:e.message});console.warn(e)}
+}
+async function hasModelFiles(dir){
+  for await(const [name,h] of dir.entries()){
+    if(h.kind==='file'&&(/^config\.(bin|json)$/i.test(name)||/^rom(\.bin)?$/i.test(name)))return true;
+  }
+  return false;
+}
+async function scanDirIntoModels(dir,ref,depth){
+  if(depth>3)return;
+  for await(const [name,handle] of dir.entries()){
+    try{
+      if(handle.kind==='directory'){
+        if(await modelFromDirHandle(handle)){ref.count++;continue}
+        await scanDirIntoModels(handle,ref,depth+1);
+      }else if(/\.zip$/i.test(name)){
+        await importZip(await handle.getFile());ref.count++;
+      }
+    }catch(e){console.warn('scan:',name,e)}
+  }
+}
+async function modelFromDirHandle(dir){
+  let cfgFile=null;
+  for await(const [name,h] of dir.entries()){
+    if(h.kind==='file'&&(name==='config.bin'||name==='config.json')){cfgFile=h;break}
+  }
+  if(!cfgFile)return null;
+  const files={};
+  for await(const [name,h] of dir.entries()){
+    if(h.kind!=='file')continue;
+    const f=await h.getFile();
+    files[name.split('/').pop()]=f;
+  }
+  await importModelPackage(files,'dir');
+  return true;
+}
+async function restoreModelsDir(){
+  if(!supportsFsAccess)return;
+  try{
+    const rec=await idbGet('dir','models-dir');
+    if(!rec||!rec.handle||rec.handle.kind!=='directory')return;
+    modelsDirHandle=rec.handle;
+    const perm=await modelsDirHandle.queryPermission({mode:'read'});
+    if(perm!=='granted')return;
+    const ref={count:0};
+    await scanDirIntoModels(modelsDirHandle,ref,0);
+    refreshModelList();
+    if(ref.count>0)toast(T('lib_dir_ok',{n:String(ref.count)}),'ok');
+  }catch(e){console.warn('restoreModelsDir',e)}
+}
+/* ============ 拖拽导入 ============ */
+async function collectDropped(dt){
+  const files=[];
+  const items=[...(dt.items||[])].filter(i=>i.kind==='file');
+  const walk=async(entry,base)=>{
+    if(entry.isFile){
+      const f=await new Promise((res,rej)=>entry.file(res,rej));
+      if(base)f.name=base+'/'+f.name;
+      files.push(f);
+    }else if(entry.isDirectory){
+      const reader=entry.createReader();
+      const batch=async()=>{
+        const ents=await new Promise((res,rej)=>reader.readEntries(res,rej));
+        if(!ents.length)return;
+        for(const e of ents)await walk(e,base?base+'/'+entry.name:entry.name);
+        await batch();
+      };
+      await batch();
+    }
+  };
+  for(const it of items){
+    const entry=it.webkitGetAsEntry?it.webkitGetAsEntry():null;
+    if(entry)await walk(entry,'');
+    else{const f=it.getAsFile();if(f)files.push(f)}
+  }
+  return files;
+}
+let dragDepth=0;
+window.addEventListener('dragover',e=>{if(!$('libModal').classList.contains('open'))return;e.preventDefault();e.dataTransfer.dropEffect='copy'});
+window.addEventListener('dragenter',e=>{if(!document.querySelector('#dropZone'))return;dragDepth++;document.querySelector('#dropZone').classList.add('drag');e.preventDefault()});
+window.addEventListener('dragleave',()=>{if(document.querySelector('#dropZone')&&--dragDepth<=0){dragDepth=0;document.querySelector('#dropZone').classList.remove('drag')}});
+window.addEventListener('drop',async e=>{
+  if(!$('libModal').classList.contains('open'))return;
+  e.preventDefault();dragDepth=0;
+  const dz=document.querySelector('#dropZone');if(dz)dz.classList.remove('drag');
+  const files=await collectDropped(e.dataTransfer);
+  if(!files.length)return;
+  if(files.length===1&&/\.zip$/i.test(files[0].name)){await importZip(files[0]);return}
+  document.querySelector('input[name=impMode][value=folder]').checked=true;
+  renderImpArea();
+  pendingFiles=files.map(f=>({name:f.name.split('/').pop(),size:f.size,file:f}));
+  selSet.clear();
+  const rom=pendingFiles.find(f=>/\.(bin|rom)$/i.test(f.name)&&/rom/i.test(f.name));
+  if(rom)selSet.add(rom.name);
+  renderFileList();
+});
+/* ================= UI 事件绑定 ================= */
+$('btnImport').onclick=()=>{renderImpArea();renderLibList();$('libModal').classList.add('open')};
+$('libClose').onclick=()=>{$('libModal').classList.remove('open')};
+document.querySelectorAll('input[name=impMode]').forEach(r=>r.onchange=()=>renderImpArea());
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#settingsPanel')&&!e.target.closest('#btnSettings'))$('settingsPanel').classList.remove('open');
+});
+$('bareClose').onclick=()=>{$('bareModal').classList.remove('open')};
+$('bareGo').onclick=()=>{
+  const romFile=$('bareRom').files[0];if(!romFile){toast('请选择 ROM 文件','warn');return}
+  const flashFile=$('bareFlash').files[0]||null;
+  if($('bareType').value==='6'&&!flashFile){toast('HW_FX_5800P 需要 flash 文件','warn');return}
+  importBare($('bareType').value,$('barePd').value,$('bareReal').value,romFile,flashFile);
+  $('bareModal').classList.remove('open');
+};
+$('bareType').onchange=()=>{$('bareFlashRow').style.display=$('bareType').value==='6'?'flex':'none'};
+$('folderInput').onchange=e=>{setPendingFiles(e.target.files);e.target.value=''};
+$('filesInput').onchange=e=>{smartImport(e.target.files);e.target.value=''};
+$('zipInput').onchange=e=>{const f=e.target.files[0];if(f)importZip(f);e.target.value=''};
+$('modelSelect').onchange=e=>selectModel(e.target.value);
+$('btnRun').onclick=()=>start();
+$('btnPause').onclick=()=>{pause();saveRamAuto()};
+$('btnReset').onclick=()=>doReset();
+$('btnSnapSave').onclick=()=>doSaveSnapshot();
+$('btnSnapLoad').onclick=()=>{$('slotModal').classList.add('open');renderSlotList()};
+$('slotSave').onclick=()=>doSaveSnapshot();
+$('slotExport').onclick=()=>{const s=snapshots[0];if(s)downloadBlob(s.name+'.snapshot',new Blob([s.bytes]))};
+$('slotImport').onclick=()=>{
+  const input=document.createElement('input');input.type='file';input.accept='.snapshot';
+  input.onchange=async()=>{
+    const f=input.files&&input.files[0];if(!f)return;
+    const bytes=new Uint8Array(await f.arrayBuffer());
+    snapshots.unshift({name:f.name.replace(/\.snapshot$/i,''),bytes,preview:'',model:currentModel?currentModel.id:''});
+    renderSlotList();
+  };
+  input.click();
+};
+$('slotClose').onclick=()=>{$('slotModal').classList.remove('open')};
+$('btnRamSave').onclick=()=>doRamSave();
+$('btnRamLoad').onclick=()=>doRamLoad();
+/* ===== 调试板按钮 ===== */
+$('btnGui').onclick=()=>{
+  if(!currentModel){toast('请先导入并运行模型','warn');return}
+  // 手机窄屏：直接打开全屏调试板
+  if(window.innerWidth<=760){
+    $('guiModal').classList.add('open');
+    setTimeout(()=>{attachGui()},60);
+  }else{
+    if(guiAttached&&guiTarget==='panel'){toast('调试板已在右栏运行','ok');return}
+    attachGui();
+  }
+};
+$('btnGuiFull').onclick=()=>{
+  $('guiModal').classList.add('open');
+  setTimeout(()=>{attachGui()},60);
+};
+$('btnGuiClose').onclick=()=>{
+  $('guiModal').classList.remove('open');
+  // 关闭全屏时，若原本是内嵌模式则重新挂载到内嵌画布
+  if(guiAttached&&guiTarget==='modal'){setTimeout(()=>{if(currentModel){guiTarget='panel';attachGui()}},60)}
+};
+$('btnGuiResize').onclick=()=>{if(currentModel)attachGui()};
+$('btnKbd').onclick=()=>{
+  const grid=$('kbdGrid');grid.innerHTML='';
+  if(currentModel){
+    for(const b of currentModel.cfg.buttons){
+      const btn=document.createElement('button');
+      btn.textContent=(b.keyname||('K'+b.kiko.toString(16).toUpperCase()));
+      btn.title='kiko=0x'+b.kiko.toString(16).toUpperCase();
+      btn.onpointerdown=ev=>{ev.preventDefault();pressKiko(b.kiko,true);btn.classList.add('kbd-press')};
+      btn.onpointerup=()=>{pressKiko(b.kiko,false);btn.classList.remove('kbd-press')};
+      btn.onpointerleave=()=>{pressKiko(b.kiko,false);btn.classList.remove('kbd-press')};
+      grid.appendChild(btn);
+    }
+  }
+  $('kbdModal').classList.add('open');
+};
+$('kbdPress').onclick=()=>{const ki=parseInt($('kbdKi').value)||0,ko=parseInt($('kbdKo').value)||0;
+  pressKiko((ko<<4)|(ki&7),true)};
+$('kbdRelease').onclick=()=>{const ki=parseInt($('kbdKi').value)||0,ko=parseInt($('kbdKo').value)||0;
+  pressKiko((ko<<4)|(ki&7),false)};
+$('kbdClose').onclick=()=>{$('kbdModal').classList.remove('open')};
+$('btnSettings').onclick=e=>{e.stopPropagation();$('settingsPanel').classList.toggle('open')};
+$('setLang').onchange=e=>setLang(e.target.value);
+$('setScale').onchange=e=>{lcdScale=parseInt(e.target.value,10)||2;if(lcdW)sizeLcdCanvas();updateFrameOnce()};
+$('setColor').onchange=()=>{if(coreReady)core('casioemu_core_set_display_color',['number','number','number'],displayColor(),'number')};
+$('setShadow').onchange=e=>{screenShadow=e.target.value==='1';
+  if(coreReady)core('casioemu_core_set_screen_shadow',['number','double'],[screenShadow?1:0,1.0],'number')};
+$('setBattery').onchange=e=>{if(coreReady)core('casioemu_core_set_battery_voltage',['double'],[parseFloat(e.target.value)||1.5],'number')};
+$('setSolar').onchange=e=>{if(coreReady)core('casioemu_core_set_solar_voltage',['double'],[parseFloat(e.target.value)||1.5],'number')};
+let refreshMs=16;
+function applyRefresh(v){refreshMs=clamp(parseInt(v,10)||16,5,2000);$('setRefresh').value=refreshMs;}
+$('setRefresh').addEventListener('input',e=>{applyRefresh(e.target.value)});
+$('setRefresh').addEventListener('change',e=>{applyRefresh(e.target.value)});
+$('qrCopy').onclick=()=>{setClipboard($('qrUrl').textContent);toast('已复制','ok')};
+$('qrClose').onclick=()=>{$('qrModal').classList.remove('open')};
+
+/* ================= 主循环 ================= */
+let lastRefreshT=0,lastPollT=0,lastGuiT=0;
+let guiFpsInterval=100;   // 调试板刷新间隔(ms)，手机上自动降频
+function computeGuiInterval(){
+  // 手机窄屏 / 全屏调试板像素多 → 降频；桌面保持流畅
+  const isMobile=window.innerWidth<=760;
+  const cv=guiCanvasEl();
+  const px=cv?cv.width*cv.height:0;
+  if(px>900000)return 160;        // 超大画布（全屏高 DPI）→ ~6fps
+  if(px>400000)return 120;        // 大画布 → ~8fps
+  if(isMobile)return 100;         // 手机 → ~10fps
+  return 50;                      // 桌面 → ~20fps
+}
+function mainLoop(ts){
+  requestAnimationFrame(mainLoop);
+  if(!coreReady||!currentModel)return;
+  if(ts-lastRefreshT>=refreshMs){ // 按设置刷新间隔节流（LCD + GUI）
+    lastRefreshT=ts;
+    try{core('casioemu_core_update_frame')}catch(e){return}
+    const w=core('casioemu_core_frame_width'),h=core('casioemu_core_frame_height');
+    if(w<=0||h<=0)return;
+    if(w!==lcdW||h!==lcdH){lcdW=w;lcdH=h;sizeLcdCanvas()}
+    const ptr=core('casioemu_core_frame_ptr');
+    // 保证缓冲已就绪（首次帧可能早于 updateFrameOnce）
+    if(!lcdImgData)lcdImgData=lcdCtx.createImageData(w,h);
+    if(ptr&&lcdImgData){
+      lcdImgData.data.set(Module.HEAPU8.subarray(ptr,ptr+w*h*4));
+      const tmp=lcdTmp;const tctx=tmp.getContext('2d');
+      tctx.clearRect(0,0,w,h);tctx.putImageData(lcdImgData,0,0);
+      const cw=lcdCtx.canvas.width,ch=lcdCtx.canvas.height;
+      lcdCtx.clearRect(0,0,cw,ch);
+      lcdCtx.drawImage(tmp,0,0,w,h,0,0,cw,ch);
+      drawEpsStatus();
+      // 独立 LCD 面板模式同步
+      if(standaloneLcdCtx){
+        const sc=standaloneLcdCtx.canvas;
+        if(sc.width!==cw||sc.height!==ch){sc.width=cw;sc.height=ch}
+        standaloneLcdCtx.clearRect(0,0,cw,ch);
+        standaloneLcdCtx.drawImage(tmp,0,0,w,h,0,0,cw,ch);
+      }
+    }
+    // 调试板按自适应帧率渲染（降低手机负载）
+    if(guiAttached&&ts-lastGuiT>=guiFpsInterval){lastGuiT=ts;renderGui()}
+  }
+  // 周期轮询（不随刷新间隔变慢）
+  if(ts-lastPollT>400){
+    lastPollT=ts;
+    try{pollQr()}catch(e){}
+    try{pollIme()}catch(e){}
+    try{handleFileRequests()}catch(e){}
+    try{pollClipboard()}catch(e){}
+    try{setStatus('stCpu',(core('casioemu_core_cpu_time')/1000).toFixed(1)+'s')}catch(e){}
+  }
+}
+requestAnimationFrame(mainLoop);
+$('lcdWrap').addEventListener('pointerdown',()=>{guiFocus=false});
+
+/* ================= 启动 ================= */
+setRunUi();
+setLang('zh');
+applyI18n();
+window.addEventListener('beforeunload',()=>{try{saveRamAuto()}catch(e){}});
+initCore();
+</script>
+</body>
+</html>
