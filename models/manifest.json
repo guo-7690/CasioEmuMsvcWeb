@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "generated": "2025-10-25",
+  "note": "静态托管无目录列表，此清单声明 models/ 下可用的模型包。新增模型时请手动追加。",
+  "models": [
+    {
+      "id": "fx-991cnx-VerC",
+      "name": "fx-991cnx-VerC",
+      "dir": "models/fx-991cnx-VerC",
+      "description": "卡西欧 fx-991CN X 中文版 · VerC 固件",
+      "files": [
+        {
+          "name": "con_fig.bin",
+          "required": true,
+          "desc": "机型配置（按钮/贴图/布局）"
+        },
+        {
+          "name": "rom.bin",
+          "required": true,
+          "desc": "ROM 固件镜像"
+        },
+        {
+          "name": "interface.png",
+          "required": true,
+          "desc": "计算器界面贴图"
+        },
+        {
+          "name": "ram.dmp",
+          "required": false,
+          "desc": "初始 RAM 状态"
+        }
+      ],
+      "flat": true
+    },
+    {
+      "id": "fx-991cnx-VerF",
+      "name": "fx-991cnx-VerF",
+      "dir": "models/fx-991cnx-VerF",
+      "description": "卡西欧 fx-991CN X 中文版 · VerF 固件",
+      "files": [
+        {
+          "name": "con_fig.bin",
+          "required": true,
+          "desc": "机型配置（按钮/贴图/布局）"
+        },
+        {
+          "name": "rom.bin",
+          "required": true,
+          "desc": "ROM 固件镜像"
+        },
+        {
+          "name": "interface.png",
+          "required": true,
+          "desc": "计算器界面贴图"
+        },
+        {
+          "name": "ram.dmp",
+          "required": false,
+          "desc": "初始 RAM 状态"
+        }
+      ],
+      "flat": true
+    },
+    {
+      "id": "fx-991cncw",
+      "name": "fx-991cncw",
+      "dir": "models/fx-991cncw",
+      "description": "卡西欧 fx-991CN CW 中文版 · 固件",
+      "files": [
+        {
+          "name": "con_fig.bin",
+          "required": true,
+          "desc": "机型配置（按钮/贴图/布局）"
+        },
+        {
+          "name": "rom.bin",
+          "required": true,
+          "desc": "ROM 固件镜像"
+        },
+        {
+          "name": "interface.png",
+          "required": true,
+          "desc": "计算器界面贴图"
+        },
+        {
+          "name": "ram.dmp",
+          "required": false,
+          "desc": "初始 RAM 状态"
+        }
+      ],
+      "flat": true
+    }
+  ],
+  "flat_mode": true
+}
