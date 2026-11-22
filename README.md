@@ -1,0 +1,2 @@
+# CasioEmuMsvcWeb
+基于CasioEmuMsvc开发的网页模拟器
